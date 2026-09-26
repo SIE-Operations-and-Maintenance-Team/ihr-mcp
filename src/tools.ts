@@ -147,11 +147,16 @@ export function createMcpServer(deps: ToolDeps): Server {
           if (!isFillArgs(args)) {
             throw new McpError(ErrorCode.InvalidParams, 'entries 参数不合法');
           }
-          const results = await withReauth(deps, async () => {
+          // client 实例跨 401 重试保留：succeededWeeks 记忆已成功周，重登重试后不重复提交。
+          // getAuthedHttp 返回构造时的共享 this.http 单例（session.ts:20-24, 50），每次调用先
+          // ensureLogin（invalidate 后重登）并重写同一实例的 Authorization 头（session.ts:47-49），
+          // 故重试时无需重建 client，只需每次尝试重新 getAuthedHttp 刷新头
+          let client: IhrClient | undefined;
+          return ok({ results: await withReauth(deps, async () => {
             const http = await deps.session.getAuthedHttp();
-            return new IhrClient(http).submitWorkHours(args.entries);
-          });
-          return ok({ results });
+            client = client ?? new IhrClient(http);
+            return client.submitWorkHours(args.entries);
+          }) });
         }
         default:
           throw new McpError(ErrorCode.MethodNotFound, `未知工具: ${name}`);

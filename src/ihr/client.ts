@@ -66,6 +66,7 @@ export class IhrClient {
   private sourcesByWeek = new Map<string, EntrySource[]>();
   private locByPoId = new Map<string, LocationInfo>();
   private baseName?: string;
+  private succeededWeeks = new Set<string>();
 
   constructor(private http: AxiosInstance) {}
 
@@ -144,12 +145,22 @@ export class IhrClient {
       groups.set(key, [...(groups.get(key) ?? []), e]);
     }
     for (const [key, group] of groups) {
+      if (this.succeededWeeks.has(key)) {
+        // 该周此前已成功提交（401 重登重试复用同一 client 实例时，避免重复提交）
+        for (const e of group) {
+          results.push({ date: e.date, projectCode: e.projectCode, success: true, message: 'ok（前次已提交）' });
+        }
+        continue;
+      }
       try {
         await this.submitWeek(key, group);
+        this.succeededWeeks.add(key);
         for (const e of group) {
           results.push({ date: e.date, projectCode: e.projectCode, success: true, message: 'ok' });
         }
       } catch (err: any) {
+        // 401（token 被服务端吊销）穿透给上层 withReauth 重登重试，不转失败结果；其余错误照旧组内失败
+        if (/\[errorCode=401\]/.test(String(err?.message))) throw err;
         for (const e of group) {
           results.push({ date: e.date, projectCode: e.projectCode, success: false, message: err?.message || '未知错误' });
         }

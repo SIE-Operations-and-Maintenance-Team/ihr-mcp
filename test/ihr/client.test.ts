@@ -147,6 +147,31 @@ describe('IhrClient.submitWorkHours', () => {
     expect(submits[1].body.timeSheetDetailDTOList[0].date).toBe('2026-09-29');
   });
 
+  it('SUBMIT 返回 errorCode 401 时穿透抛出（交由上层 withReauth 重登重试）', async () => {
+    const calls: Array<{ path: string; body: any }> = [];
+    const http = makeHttp({ ...base, [IHR_SUBMIT_PATH]: { errorCode: '401', errorMsg: '系统未登录或认证已过期' } }, calls);
+    await expect(
+      new IhrClient(http).submitWorkHours([
+        { date: '2026-09-22', projectCode: 'SD26040155', activityType: '项目执行', hours: 8, workContent: 'x' },
+      ]),
+    ).rejects.toThrow(/errorCode=401/);
+  });
+
+  it('已成功周记忆：同一 client 重复提交相同条目时跳过已提交周', async () => {
+    const calls: Array<{ path: string; body: any }> = [];
+    const http = makeHttp(base, calls);
+    const client = new IhrClient(http);
+    const entries = [
+      { date: '2026-09-22', projectCode: 'SD26040155', activityType: '项目执行', hours: 8, workContent: 'x' },
+      { date: '2026-09-29', projectCode: 'SD26040155', activityType: '项目执行', hours: 8, workContent: 'y' },
+    ];
+    const first = await client.submitWorkHours(entries);
+    expect(first.every((r) => r.success)).toBe(true);
+    const second = await client.submitWorkHours(entries);
+    expect(second.every((r) => r.success && r.message.includes('前次已提交'))).toBe(true);
+    expect(calls.filter((c) => c.path === IHR_SUBMIT_PATH)).toHaveLength(2); // 第二次零新提交
+  });
+
   it('其他项目的项目地交付缺显式 areaId/area 时该周失败并提示，不回退本条目地点', async () => {
     const calls: Array<{ path: string; body: any }> = [];
     const http = makeHttp(base, calls);
