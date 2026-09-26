@@ -29,6 +29,10 @@
   </table>
 </div>
 <script>
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 const SOURCE_LABEL = { manual: '手动', guess: '推断', none: '未匹配' };
 
 async function loadStatus() {
@@ -39,7 +43,7 @@ async function loadStatus() {
       el.innerHTML = '⚠️ 凭据未配置：请在 <code>%USERPROFILE%\\.ihr-mcp\\config.json</code> 填入 username/password 后重启服务';
     } else {
       const exp = s.loggedIn ? '✅ 有效至 ' + new Date(s.tokenExpiresAt).toLocaleString() : '⏳ 未登录（首次调用时自动登录）';
-      el.innerHTML = '用户：<b>' + s.username + '</b> ｜ 登录态：' + exp;
+      el.innerHTML = '用户：<b>' + esc(s.username) + '</b> ｜ 登录态：' + exp;
     }
   } catch (e) {
     el.textContent = '状态获取失败: ' + e.message;
@@ -61,11 +65,11 @@ async function loadProjects() {
     tbody.innerHTML = '';
     for (const p of projects) {
       const options = [...new Set([p.customer, ...folders])]
-        .map((f) => '<option value="' + f + '"' + (f === p.customer ? ' selected' : '') + '>' + f + '</option>')
+        .map((f) => '<option value="' + esc(f) + '"' + (f === p.customer ? ' selected' : '') + '>' + esc(f) + '</option>')
         .join('');
       const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + p.projectCode + '</td><td>' + p.projectName + '</td><td>' + (p.activityType || '-') + '</td>'
-        + '<td><select data-code="' + p.projectCode + '">' + options + '</select></td>'
+      tr.innerHTML = '<td>' + esc(p.projectCode) + '</td><td>' + esc(p.projectName) + '</td><td>' + esc(p.activityType || '-') + '</td>'
+        + '<td><select data-code="' + esc(p.projectCode) + '">' + options + '</select></td>'
         + '<td><span class="tag ' + p.customerSource + '">' + (SOURCE_LABEL[p.customerSource] || p.customerSource) + '</span></td>';
       tr.querySelector('select').addEventListener('change', (e) => {
         saveMapping(e.target.dataset.code, e.target.value);
