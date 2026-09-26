@@ -105,4 +105,31 @@ describe('IhrClient.submitWorkHours', () => {
     expect(detail.area).toBe('顺德');
     expect(calls.some((c) => c.path === IHR_LOCATION_PATH)).toBe(false);
   });
+
+  it('居家远程交付未提供 area 时缺省为居家且不携带 areaId', async () => {
+    const calls: Array<{ path: string; body: any }> = [];
+    const http = makeHttp(base, calls);
+    const results = await new IhrClient(http).submitWorkHours([
+      { date: '2026-09-22', projectCode: 'SD26040155', activityType: '项目执行', hours: 8, workContent: 'w', tsDeliveryType: '居家远程交付' },
+    ]);
+    expect(results[0].success).toBe(true);
+    const detail = calls.find((c) => c.path === IHR_SUBMIT_PATH)!.body.timeSheetDetailDTOList[0];
+    expect(detail.tsDeliveryType).toBe('居家远程交付');
+    expect(detail.area).toBe('居家');
+    expect(detail.areaId).toBeUndefined();
+  });
+
+  it('其他项目的项目地交付缺显式 areaId/area 时该周失败并提示，不回退本条目地点', async () => {
+    const calls: Array<{ path: string; body: any }> = [];
+    const http = makeHttp(base, calls);
+    const results = await new IhrClient(http).submitWorkHours([
+      { date: '2026-09-22', projectCode: 'SD26040155', activityType: '项目执行', hours: 8, workContent: 'w', tsDeliveryType: '其他项目的项目地交付' },
+    ]);
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('其他项目的项目地交付');
+    expect(results[0].message).toContain('areaId');
+    expect(results[0].message).toContain('otherPoCode');
+    expect(calls.some((c) => c.path === IHR_SUBMIT_PATH)).toBe(false);
+    expect(calls.some((c) => c.path === IHR_LOCATION_PATH)).toBe(false);
+  });
 });

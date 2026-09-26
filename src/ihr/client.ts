@@ -188,7 +188,7 @@ export class IhrClient {
       } else {
         const deliveryType = e.tsDeliveryType ?? '项目地交付';
         detail.tsDeliveryType = deliveryType;
-        if (deliveryType === '项目地交付' || deliveryType === '其他项目的项目地交付') {
+        if (deliveryType === '项目地交付') {
           const loc = await this.getLocation(src.poId);
           detail.areaId = e.areaId ?? loc.pmsId;
           detail.area = e.area ?? loc.area;
@@ -198,10 +198,20 @@ export class IhrClient {
             if (loc.city) detail.city = loc.city;
             if (loc.district) detail.district = loc.district;
           }
+        } else if (deliveryType === '其他项目的项目地交付') {
+          // area 选项来自 projectCode≠本项目的地点记录，且 DTO 需另带 otherPoCode（FillEntry 暂无法表达）；
+          // 缺显式值时禁止静默回退本条目地点（错误归属风险），该周条目走失败结果
+          if (!e.areaId || !e.area) {
+            throw new Error('交付类型「其他项目的项目地交付」必须显式提供 areaId 与 area（otherPoCode 暂不支持）');
+          }
+          detail.areaId = e.areaId;
+          detail.area = e.area;
         } else {
           // Base地交付/公司远程交付/居家远程交付：DTO areaId=null，仅调用方显式提供时携带
           if (e.areaId) detail.areaId = e.areaId;
-          detail.area = e.area ?? (deliveryType === 'Base地交付' ? await this.getBaseName() : undefined);
+          detail.area = e.area
+            ?? (deliveryType === 'Base地交付' ? await this.getBaseName()
+              : deliveryType === '居家远程交付' ? '居家' : undefined); // 居家选项唯一且自动预选（§2），area 必填
         }
       }
       details.push(detail);
