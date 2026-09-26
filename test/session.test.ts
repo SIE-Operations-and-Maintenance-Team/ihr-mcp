@@ -34,6 +34,16 @@ describe('SessionManager', () => {
     const sm = new SessionManager(cfg, fake as any);
     await expect(sm.ensureLogin()).rejects.toThrow('重置');
   });
+  it('invalidate 清除 token，ensureLogin 重新登录（服务端吊销 401 恢复路径）', async () => {
+    const fake = new FakeSso();
+    const sm = new SessionManager(cfg, fake as any);
+    await sm.ensureLogin();
+    expect(fake.calls).toBe(1);
+    sm.invalidate();
+    expect(sm.getTokenInfo().loggedIn).toBe(false);
+    await sm.ensureLogin();
+    expect(fake.calls).toBe(2);
+  });
   it('getAuthedHttp 注入 Bearer 头（逆向核心发现：API 只认 Bearer 不认 cookie）', async () => {
     const fake = new FakeSso();
     const sm = new SessionManager(cfg, fake as any);

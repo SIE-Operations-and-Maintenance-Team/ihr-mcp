@@ -208,6 +208,10 @@ export class IhrClient {
           detail.area = e.area;
         } else {
           // Base地交付/公司远程交付/居家远程交付：DTO areaId=null，仅调用方显式提供时携带
+          if (deliveryType === '公司远程交付' && !e.area) {
+            // 公司远程交付有 6 个办公区域选项、无确定缺省，禁止静默提交空 area（逆向结果 §2），该周条目走失败结果
+            throw new Error('交付类型「公司远程交付」必须显式提供 area（6 个办公区域选项，无确定缺省）');
+          }
           if (e.areaId) detail.areaId = e.areaId;
           detail.area = e.area
             ?? (deliveryType === 'Base地交付' ? await this.getBaseName()

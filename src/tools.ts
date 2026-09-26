@@ -37,6 +37,20 @@ function isFillArgs(args: any): args is { entries: FillEntry[] } {
   );
 }
 
+// ihr 服务端吊销 token 时返回 errorCode=401（IhrClient.call() 抛出该形态消息）：
+// invalidate 后 ensureLogin 重新登录并重试一次；其他错误原样抛出
+export async function withReauth<T>(deps: ToolDeps, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err: any) {
+    if (/\[errorCode=401\]/.test(String(err?.message))) {
+      deps.session.invalidate();
+      return await fn();
+    }
+    throw err;
+  }
+}
+
 export function createMcpServer(deps: ToolDeps): Server {
   const server = new Server(
     { name: 'ihr-mcp', version: '0.1.0' },
@@ -119,7 +133,7 @@ export function createMcpServer(deps: ToolDeps): Server {
           });
         }
         case 'list_projects':
-          return ok({ projects: await listProjectsWithMapping(deps) });
+          return ok({ projects: await withReauth(deps, () => listProjectsWithMapping(deps)) });
         case 'get_customer_mapping':
           return ok({ mapping: deps.mapping.load() });
         case 'set_customer_mapping': {
@@ -133,8 +147,11 @@ export function createMcpServer(deps: ToolDeps): Server {
           if (!isFillArgs(args)) {
             throw new McpError(ErrorCode.InvalidParams, 'entries 参数不合法');
           }
-          const http = await deps.session.getAuthedHttp();
-          return ok({ results: await new IhrClient(http).submitWorkHours(args.entries) });
+          const results = await withReauth(deps, async () => {
+            const http = await deps.session.getAuthedHttp();
+            return new IhrClient(http).submitWorkHours(args.entries);
+          });
+          return ok({ results });
         }
         default:
           throw new McpError(ErrorCode.MethodNotFound, `未知工具: ${name}`);

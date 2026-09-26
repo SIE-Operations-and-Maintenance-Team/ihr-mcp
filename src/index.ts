@@ -48,7 +48,8 @@ async function main(): Promise<void> {
         const perReqTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         await perReqServer.connect(perReqTransport);
         await perReqTransport.handleRequest(req, res);
-      } catch {
+      } catch (err) {
+        console.error('[/mcp]', err);
         if (!res.headersSent) {
           res.writeHead(500);
           res.end('Internal Server Error');

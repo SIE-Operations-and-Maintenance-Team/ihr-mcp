@@ -10,13 +10,19 @@ export interface WebApiDeps {
   mapping: MappingStore;
 }
 
+// Web API 仅限本机访问：Host 必须为 127.0.0.1/localhost/[::1]（可带端口），防跨主机调用/DNS rebinding
+const LOCAL_HOST_RE = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
+
 export function createWebApi(deps: WebApiDeps) {
   return async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
-    const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     const json = (code: number, payload: unknown) => {
       res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(payload));
     };
+    if (!LOCAL_HOST_RE.test(req.headers.host ?? '')) {
+      return json(403, { error: '仅限本机访问' });
+    }
+    const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     try {
       if (req.method === 'GET' && url.pathname === '/api/status') {
         const t = deps.session.getTokenInfo();

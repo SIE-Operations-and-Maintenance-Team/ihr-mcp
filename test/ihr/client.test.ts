@@ -119,6 +119,34 @@ describe('IhrClient.submitWorkHours', () => {
     expect(detail.areaId).toBeUndefined();
   });
 
+  it('公司远程交付缺显式 area 时该周失败并提示，不静默为空', async () => {
+    const calls: Array<{ path: string; body: any }> = [];
+    const http = makeHttp(base, calls);
+    const results = await new IhrClient(http).submitWorkHours([
+      { date: '2026-09-22', projectCode: 'SD26040155', activityType: '项目执行', hours: 8, workContent: 'w', tsDeliveryType: '公司远程交付' },
+    ]);
+    expect(results[0].success).toBe(false);
+    expect(results[0].message).toContain('公司远程交付');
+    expect(results[0].message).toContain('显式提供 area');
+    expect(calls.some((c) => c.path === IHR_SUBMIT_PATH)).toBe(false);
+  });
+
+  it('跨两周条目按周一~周日分组逐周提交', async () => {
+    const calls: Array<{ path: string; body: any }> = [];
+    const http = makeHttp(base, calls);
+    const results = await new IhrClient(http).submitWorkHours([
+      { date: '2026-09-22', projectCode: 'SD26040155', activityType: '项目执行', hours: 8, workContent: 'x' },
+      { date: '2026-09-29', projectCode: 'SD26040155', activityType: '项目执行', hours: 8, workContent: 'y' },
+    ]);
+    expect(results.every((r) => r.success)).toBe(true);
+    const submits = calls.filter((c) => c.path === IHR_SUBMIT_PATH);
+    expect(submits).toHaveLength(2);
+    expect(submits[0].body.timeSheetMainDTO).toMatchObject({ startDate: '2026-09-21', endDate: '2026-09-27' });
+    expect(submits[1].body.timeSheetMainDTO).toMatchObject({ startDate: '2026-09-28', endDate: '2026-10-04' });
+    expect(submits[0].body.timeSheetDetailDTOList[0].date).toBe('2026-09-22');
+    expect(submits[1].body.timeSheetDetailDTOList[0].date).toBe('2026-09-29');
+  });
+
   it('其他项目的项目地交付缺显式 areaId/area 时该周失败并提示，不回退本条目地点', async () => {
     const calls: Array<{ path: string; body: any }> = [];
     const http = makeHttp(base, calls);

@@ -37,6 +37,12 @@ export class SessionManager {
     return this.token;
   }
 
+  // token 被服务端吊销（ihr errorCode=401）时由 withReauth 调用，强制下次 ensureLogin 重新登录
+  invalidate(): void {
+    this.token = undefined;
+    this.tokenExpiresAt = 0;
+  }
+
   async getAuthedHttp(): Promise<AxiosInstance> {
     await this.ensureLogin();
     // ihr API 鉴权只认 Authorization: Bearer 头，不认 cookie（逆向结果"会话建立"节实测矩阵）
