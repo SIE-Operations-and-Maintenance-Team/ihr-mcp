@@ -1,0 +1,42 @@
+import { describe, it, expect } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { loadConfig, writeConfigTemplate } from '../src/config.js';
+
+function tmpPath(name: string): string {
+  return join(mkdtempSync(join(tmpdir(), 'ihr-mcp-')), name);
+}
+
+describe('loadConfig', () => {
+  it('文件不存在时返回默认值且 configOk=false', () => {
+    const r = loadConfig(tmpPath('none.json'));
+    expect(r.configOk).toBe(false);
+    expect(r.username).toBe('');
+    expect(r.port).toBe(3210);
+    expect(r.host).toBe('127.0.0.1');
+    expect(r.projectsRoot).toBe('F:\\项目');
+  });
+  it('配置了用户名密码时 configOk=true', () => {
+    const p = tmpPath('ok.json');
+    writeFileSync(p, JSON.stringify({ username: 'u', password: 'p' }), 'utf8');
+    const r = loadConfig(p);
+    expect(r.configOk).toBe(true);
+    expect(r.username).toBe('u');
+    expect(r.port).toBe(3210);
+  });
+  it('只配用户名时 configOk=false', () => {
+    const p = tmpPath('half.json');
+    writeFileSync(p, JSON.stringify({ username: 'u' }), 'utf8');
+    expect(loadConfig(p).configOk).toBe(false);
+  });
+});
+
+describe('writeConfigTemplate', () => {
+  it('生成模板文件，未填真实凭据前 configOk=false', () => {
+    const p = tmpPath('tpl.json');
+    writeConfigTemplate(p);
+    expect(loadConfig(p).configOk).toBe(false);
+    expect(loadConfig(p).port).toBe(3210);
+  });
+});
