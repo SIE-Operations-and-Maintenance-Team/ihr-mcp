@@ -35,4 +35,30 @@ describe('SsoClient.login', () => {
     expect(r.success).toBe(false);
     expect(r.passwordExpired).toBe(true);
   });
+  it('HTTP 500 时失败并带回服务端错误信息', async () => {
+    // 模拟内置 http adapter 对非 2xx 的行为：settle 以带 response 的 AxiosError reject
+    const http = axios.create({
+      adapter: (async (config: any) => {
+        const err: any = new Error('Request failed with status code 500');
+        err.response = { data: { errorMsg: '服务异常' }, status: 500, statusText: 'Internal Server Error', headers: {}, config };
+        throw err;
+      }) as any,
+    });
+    const c = new SsoClient(http);
+    const r = await c.login('user', 'pass');
+    expect(r.success).toBe(false);
+    expect(r.errorCode).toBe('HTTP_500');
+    expect(r.errorMsg).toBe('服务异常');
+  });
+  it('网络错误（adapter 抛异常）时失败并带回错误信息', async () => {
+    const http = axios.create({
+      adapter: (async () => {
+        throw new Error('connect ECONNREFUSED');
+      }) as any,
+    });
+    const c = new SsoClient(http);
+    const r = await c.login('user', 'pass');
+    expect(r.success).toBe(false);
+    expect(r.errorMsg).toBe('connect ECONNREFUSED');
+  });
 });
