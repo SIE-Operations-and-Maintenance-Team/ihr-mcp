@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>ihr-mcp 考勤管理</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; max-width: 1100px; margin: 24px auto; padding: 0 16px; color: #333; }
+  h1 { font-size: 20px; }
+  .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #e5e5e5; padding: 6px 10px; font-size: 13px; text-align: left; }
+  th { background: #fafafa; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; }
+  .manual { background: #e6f7e6; color: #389e0d; }
+  .guess { background: #fff7e6; color: #d48806; }
+  .none { background: #fff1f0; color: #cf1322; }
+  button { padding: 4px 14px; cursor: pointer; }
+  #msg { margin-left: 12px; font-size: 13px; color: #888; }
+</style>
+</head>
+<body>
+<h1>ihr-mcp 考勤管理</h1>
+<div class="card" id="status">状态加载中…</div>
+<div class="card">
+  <button onclick="loadProjects()">刷新项目列表</button><span id="msg"></span>
+  <table id="projTable" style="margin-top:12px">
+    <thead><tr><th>项目编号</th><th>项目名称</th><th>活动类型</th><th>客户</th><th>来源</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+<script>
+const SOURCE_LABEL = { manual: '手动', guess: '推断', none: '未匹配' };
+
+async function loadStatus() {
+  const el = document.getElementById('status');
+  try {
+    const s = await (await fetch('/api/status')).json();
+    if (!s.configOk) {
+      el.innerHTML = '⚠️ 凭据未配置：请在 <code>%USERPROFILE%\\.ihr-mcp\\config.json</code> 填入 username/password 后重启服务';
+    } else {
+      const exp = s.loggedIn ? '✅ 有效至 ' + new Date(s.tokenExpiresAt).toLocaleString() : '⏳ 未登录（首次调用时自动登录）';
+      el.innerHTML = '用户：<b>' + s.username + '</b> ｜ 登录态：' + exp;
+    }
+  } catch (e) {
+    el.textContent = '状态获取失败: ' + e.message;
+  }
+}
+
+async function loadProjects() {
+  const msg = document.getElementById('msg');
+  msg.textContent = '加载中…';
+  try {
+    const [projRes, folderRes] = await Promise.all([fetch('/api/projects'), fetch('/api/local-folders')]);
+    const { projects } = await projRes.json();
+    if (!Array.isArray(projects) || projects.length === 0) {
+      msg.textContent = '未获取到项目条目（检查登录状态与凭据）';
+      return;
+    }
+    const { folders } = await folderRes.json();
+    const tbody = document.querySelector('#projTable tbody');
+    tbody.innerHTML = '';
+    for (const p of projects) {
+      const options = [...new Set([p.customer, ...folders])]
+        .map((f) => '<option value="' + f + '"' + (f === p.customer ? ' selected' : '') + '>' + f + '</option>')
+        .join('');
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + p.projectCode + '</td><td>' + p.projectName + '</td><td>' + (p.activityType || '-') + '</td>'
+        + '<td><select data-code="' + p.projectCode + '">' + options + '</select></td>'
+        + '<td><span class="tag ' + p.customerSource + '">' + (SOURCE_LABEL[p.customerSource] || p.customerSource) + '</span></td>';
+      tr.querySelector('select').addEventListener('change', (e) => {
+        saveMapping(e.target.dataset.code, e.target.value);
+      });
+      tbody.appendChild(tr);
+    }
+    msg.textContent = '共 ' + projects.length + ' 个条目';
+  } catch (e) {
+    msg.textContent = '加载失败: ' + e.message;
+  }
+}
+
+async function saveMapping(code, customer) {
+  const r = await (await fetch('/api/mapping', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectCode: code, customer }),
+  })).json();
+  document.getElementById('msg').textContent = r.ok ? '已保存 ' + code + ' → ' + customer : '保存失败: ' + (r.error || '');
+}
+
+loadStatus();
+loadProjects();
+</script>
+</body>
+</html>
