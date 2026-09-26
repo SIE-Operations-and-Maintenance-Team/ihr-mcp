@@ -34,4 +34,10 @@ describe('SessionManager', () => {
     const sm = new SessionManager(cfg, fake as any);
     await expect(sm.ensureLogin()).rejects.toThrow('重置');
   });
+  it('getAuthedHttp 注入 Bearer 头（逆向核心发现：API 只认 Bearer 不认 cookie）', async () => {
+    const fake = new FakeSso();
+    const sm = new SessionManager(cfg, fake as any);
+    const http = await sm.getAuthedHttp();
+    expect(http.defaults.headers.common['Authorization']).toBe('Bearer T1');
+  });
 });
