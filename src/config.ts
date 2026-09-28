@@ -14,7 +14,7 @@ export interface LoadConfigResult extends Config {
   configOk: boolean;
 }
 
-const DEFAULTS = { port: 3210, host: '127.0.0.1', projectsRoot: 'F:\\项目' };
+const DEFAULTS = { port: 13210, host: '127.0.0.1', projectsRoot: 'F:\\项目' };
 
 // writeConfigTemplate 写入的占位符：非空但不算已配置真实凭据
 const USERNAME_PLACEHOLDER = '在此填入ihr用户名';
@@ -53,7 +53,7 @@ export function writeConfigTemplate(path: string = defaultConfigPath()): void {
   writeFileSync(path, JSON.stringify({
     username: USERNAME_PLACEHOLDER,
     password: PASSWORD_PLACEHOLDER,
-    port: 3210,
+    port: 13210,
     host: '127.0.0.1',
     projectsRoot: 'F:\\项目',
   }, null, 2), 'utf8');
@@ -66,13 +66,13 @@ export function ensureConfigTemplate(path: string = defaultConfigPath()): boolea
   return true;
 }
 
-// 服务监听地址优先级：命令行参数 > config.json > 内置默认（3210/127.0.0.1）
+// 服务监听地址优先级：命令行参数 > config.json > 内置默认（13210/127.0.0.1）
 export function resolveServerAddress(
   cfg: { port?: number; host?: string },
   cli?: { port?: string; host?: string },
 ): { port: number; host: string } {
   return {
-    port: cli?.port !== undefined ? parseInt(cli.port, 10) : cfg.port ?? 3210,
+    port: cli?.port !== undefined ? parseInt(cli.port, 10) : cfg.port ?? 13210,
     host: cli?.host !== undefined ? cli.host : cfg.host ?? '127.0.0.1',
   };
 }

@@ -13,7 +13,7 @@ describe('loadConfig', () => {
     const r = loadConfig(tmpPath('none.json'));
     expect(r.configOk).toBe(false);
     expect(r.username).toBe('');
-    expect(r.port).toBe(3210);
+    expect(r.port).toBe(13210);
     expect(r.host).toBe('127.0.0.1');
     expect(r.projectsRoot).toBe('F:\\项目');
   });
@@ -23,7 +23,7 @@ describe('loadConfig', () => {
     const r = loadConfig(p);
     expect(r.configOk).toBe(true);
     expect(r.username).toBe('u');
-    expect(r.port).toBe(3210);
+    expect(r.port).toBe(13210);
   });
   it('只配用户名时 configOk=false', () => {
     const p = tmpPath('half.json');
@@ -37,7 +37,7 @@ describe('writeConfigTemplate', () => {
     const p = tmpPath('tpl.json');
     writeConfigTemplate(p);
     expect(loadConfig(p).configOk).toBe(false);
-    expect(loadConfig(p).port).toBe(3210);
+    expect(loadConfig(p).port).toBe(13210);
   });
 });
 
@@ -48,7 +48,7 @@ describe('ensureConfigTemplate（启动时自动生成，用户指令：没有�
     expect(ensureConfigTemplate(p)).toBe(true);
     expect(existsSync(p)).toBe(true);
     expect(loadConfig(p).configOk).toBe(false); // 占位符 → 未配置
-    expect(loadConfig(p).port).toBe(3210);
+    expect(loadConfig(p).port).toBe(13210);
   });
   it('配置已存在时不覆盖并返回 false', () => {
     const p = tmpPath('keep.json');
@@ -66,8 +66,8 @@ describe('resolveServerAddress（监听地址优先级：命令行 > config.json
   it('无命令行参数时取 config.json 值', () => {
     expect(resolveServerAddress(cfg)).toEqual({ port: 4000, host: '0.0.0.0' });
   });
-  it('config.json 也缺省时回落内置默认 3210/127.0.0.1', () => {
-    expect(resolveServerAddress({ port: undefined as any, host: undefined as any })).toEqual({ port: 3210, host: '127.0.0.1' });
+  it('config.json 也缺省时回落内置默认 13210/127.0.0.1', () => {
+    expect(resolveServerAddress({ port: undefined as any, host: undefined as any })).toEqual({ port: 13210, host: '127.0.0.1' });
   });
   it('仅命令行给端口时 host 仍取 config.json', () => {
     expect(resolveServerAddress(cfg, { port: '5000' })).toEqual({ port: 5000, host: '0.0.0.0' });

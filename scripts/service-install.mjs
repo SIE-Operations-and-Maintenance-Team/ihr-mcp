@@ -8,8 +8,8 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const { Service } = svc;
 
-// 读配置端口（缺省 3210），安装前自动结束占用端口的旧实例（如手动启动的 node 进程）
-let port = 3210;
+// 读配置端口（缺省 13210），安装前自动结束占用端口的旧实例（如手动启动的 node 进程）
+let port = 13210;
 try {
   port = JSON.parse(readFileSync(join(root, 'dist', 'config.json'), 'utf8')).port ?? port;
 } catch { /* 配置不存在用默认 */ }

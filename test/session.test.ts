@@ -11,7 +11,7 @@ class FakeSso {
   }
 }
 
-const cfg = { username: 'u', password: 'p', port: 3210, host: '127.0.0.1', projectsRoot: 'F:\\项目' };
+const cfg = { username: 'u', password: 'p', port: 13210, host: '127.0.0.1', projectsRoot: 'F:\\项目' };
 
 describe('SessionManager', () => {
   it('登录成功后 token 缓存，重复 ensureLogin 不再登录', async () => {

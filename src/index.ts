@@ -18,7 +18,7 @@ program
   .name('ihr-mcp')
   .version('0.1.0')
   .option('-t, --transport <type>', '传输类型 (http, stdio)', 'http')
-  .option('-p, --port <number>', 'HTTP 端口（优先级：命令行 > config.json > 3210）')
+  .option('-p, --port <number>', 'HTTP 端口（优先级：命令行 > config.json > 13210）')
   .option('-h, --host <host>', '监听地址（优先级：命令行 > config.json > 127.0.0.1）')
   .parse();
 const opts = program.opts();

@@ -41,7 +41,7 @@ function makeDeps(): ToolDeps {
   const cfg: LoadConfigResult = {
     username: '在此填入ihr用户名',
     password: '在此填入ihr密码',
-    port: 3210,
+    port: 13210,
     host: '127.0.0.1',
     projectsRoot: 'F:\\项目',
     configOk: false,
