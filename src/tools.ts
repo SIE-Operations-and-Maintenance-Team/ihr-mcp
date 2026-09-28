@@ -72,6 +72,11 @@ export function createMcpServer(deps: ToolDeps): Server {
         inputSchema: { type: 'object' as const, properties: {}, required: [] },
       },
       {
+        name: 'get_config',
+        description: '获取非敏感运行配置（如 projectsRoot，供 skill 动态取扫描根目录）。凭据永不出 MCP',
+        inputSchema: { type: 'object' as const, properties: {}, required: [] },
+      },
+      {
         name: 'list_projects',
         description: '获取 ihr 报工项目条目列表（项目编号/名称/活动类型/客户映射）',
         inputSchema: { type: 'object' as const, properties: {}, required: [] },
@@ -140,6 +145,9 @@ export function createMcpServer(deps: ToolDeps): Server {
             configPath: defaultConfigPath(),
           });
         }
+        case 'get_config':
+          // 只暴露非敏感路径配置；username/password 永不出 MCP（skill 经此动态取扫描根目录）
+          return ok({ projectsRoot: deps.cfg.projectsRoot });
         case 'list_projects':
           requireConfigOk(deps);
           return ok({ projects: await withReauth(deps, () => listProjectsWithMapping(deps)) });

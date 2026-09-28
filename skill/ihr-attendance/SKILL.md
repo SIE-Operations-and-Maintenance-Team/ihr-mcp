@@ -1,21 +1,29 @@
 ---
 name: ihr-attendance
-description: 填报 ihr 考勤工时。当用户要求"填报考勤/报工/工时/ihr考勤/工时填报"时使用。获取项目列表→扫描 F:\项目 下 doc 工作文档→匹配项目→生成考勤填报文档→用户确认→通过 ihr-mcp 自动提交
+description: 填报 ihr 考勤工时。当用户要求"填报考勤/报工/工时/ihr考勤/工时填报"时使用。获取项目列表→扫描工作文档→匹配项目→生成考勤填报文档→用户确认→通过 ihr-mcp 自动提交
 ---
 
 # ihr 考勤填报
 
+## 原则
+
+- 本 skill 只编排流程、调用 ihr MCP 工具、与用户交互；**不读写任何配置文件，不接触用户名密码**（凭据由 ihr-mcp 服务端管理）
+- **不含任何硬编码路径与地址**：本地路径一律动态取自 MCP 工具返回值——项目根目录用 `get_config` 的 `projectsRoot`，配置文件位置用 `get_login_status` 的 `configPath`
+- 不假设 MCP 服务的地址与端口（注册与连接由 ZCode 客户端配置管理，agent 只按工具名调用）
+
 ## 前置条件
 
-- ihr-mcp 服务运行中（默认 http://127.0.0.1:13210/mcp）
-- 凭据配置在程序根目录 config.json（F:\GitHubs\ihr-mcp\config.json，username/password）
-- 若 `get_login_status` 返回 configOk=false，停止流程，指导用户填写配置并重启服务
+- ZCode 已注册 ihr MCP 服务（可用工具：`get_login_status` / `get_config` / `list_projects` / `get_customer_mapping` / `fill_work_hours`）
 
 ## 流程
 
 ### 1. 检查并获取数据
 
-依次调用 MCP 工具：`get_login_status` → `list_projects` → `get_customer_mapping`。
+依次调用 MCP 工具：
+
+1. `get_login_status`：若返回 `configOk=false`，**停止流程**，按返回的 `configPath` 指导用户填入 username/password 并重启 ihr-mcp 服务后重试本步（agent 不代填、不读该文件）
+2. `get_config`：记下返回的 `projectsRoot`（下文记作 `<P>`，本流程所有本地路径基于它）
+3. `list_projects`：项目条目列表；`get_customer_mapping`：映射表
 
 ### 2. 确定报工周期
 
@@ -23,16 +31,16 @@ description: 填报 ihr 考勤工时。当用户要求"填报考勤/报工/工�
 
 ### 3. 扫描工作文档
 
-在 Git Bash 执行（示例为 2026 年 9 月；同时匹配前缀日期 `20260901-xxx.md` 与后缀日期 `bug-diagnosis-xxx-20260901.md` 两种命名习惯）：
+在 Git Bash 执行（示例为 2026 年 9 月；`<P>` 用第 1 步的 projectsRoot 替换；同时匹配前缀日期 `20260901-xxx.md` 与后缀日期 `bug-diagnosis-xxx-20260901.md` 两种命名习惯）：
 
 ```bash
-find "F:/项目" -path "*/doc/*" -type f \( -name "202609*.md" -o -name "*-202609*.md" \)
+find "<P>" -path "*/doc/*" -type f \( -name "202609*.md" -o -name "*-202609*.md" \)
 ```
 
 周期跨月时（如"上周"横跨 8/9 月）对每个月份前缀各执行一次并合并结果。若担心仍有遗漏，用 mtime 补扫一遍与按名结果合并去重：
 
 ```bash
-find "F:/项目" -path "*/doc/*" -name "*.md" -type f -newermt 2026-09-01 ! -newermt 2026-10-01
+find "<P>" -path "*/doc/*" -name "*.md" -type f -newermt 2026-09-01 ! -newermt 2026-10-01
 ```
 
 逐个读取文件标题与开头约 30 行，归纳每天做了什么。若文档内容标注的实际日期与文件名不一致，以内容为准。
@@ -46,7 +54,7 @@ find "F:/项目" -path "*/doc/*" -name "*.md" -type f -newermt 2026-09-01 ! -new
 
 ### 5. 生成考勤填报文档
 
-写入 `F:/项目/doc/<今天yyyymmdd>-考勤填报-<YYYY年M月>.md`，表格格式**必须严格**如下（后续按表格解析提交）：
+写入 `<P>/doc/<今天yyyymmdd>-考勤填报-<YYYY年M月>.md`，表格格式**必须严格**如下（后续按表格解析提交）：
 
 ```markdown
 # <YYYY年M月>考勤填报（待确认）

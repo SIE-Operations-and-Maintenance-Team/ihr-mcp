@@ -89,3 +89,15 @@ describe('失败报错携带配置路径（用户指令）', () => {
     ).rejects.toThrow(/凭据未配置/);
   });
 });
+
+describe('get_config（skill 去路径化：动态取扫描根目录，凭据永不出 MCP）', () => {
+  it('返回 projectsRoot，且不含任何凭据字段', async () => {
+    const deps = makeDeps();
+    const r = await callTool(deps, 'get_config');
+    const payload = JSON.parse((r.content as any)[0].text);
+    expect(payload.projectsRoot).toBe('F:\\项目');
+    expect(payload).not.toHaveProperty('username');
+    expect(payload).not.toHaveProperty('password');
+    expect(Object.keys(payload)).toEqual(['projectsRoot']);
+  });
+});
