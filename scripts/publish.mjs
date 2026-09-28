@@ -1,7 +1,7 @@
 // 生成离线发布包：dist + 生产依赖 node_modules + 部署 cmd，打成 zip。
 // 同事机器无需 npm、无需联网；唯一前提是已安装 Node.js ≥20（服务运行时）。
 // 本机数据（config.json/mapping.json）不进包：凭据隔离，同事首启自动生成配置模板。
-import { cpSync, rmSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { cpSync, rmSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -17,8 +17,16 @@ if (!existsSync(join(root, 'dist', 'index.js'))) {
   process.exit(1);
 }
 
-rmSync(stage, { recursive: true, force: true });
-rmSync(zipPath, { force: true });
+try {
+  rmSync(stage, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+} catch {
+  // 目录被占用（典型：某个命令行窗口的当前目录停在该目录内）——清空内容后复用目录
+  console.log('[提示] 发布目录被占用，清空内容后复用（可关闭停留在该目录的命令行窗口）');
+  for (const e of readdirSync(stage)) {
+    rmSync(join(stage, e), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  }
+}
+rmSync(zipPath, { force: true, maxRetries: 5, retryDelay: 200 });
 mkdirSync(join(stage, 'dist'), { recursive: true });
 
 // 1. dist（排除本机数据）
