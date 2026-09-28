@@ -3,10 +3,10 @@ import axios from 'axios';
 import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
 import { readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { join, dirname } from 'node:path';
 
-const cfgPath = join(homedir(), '.ihr-mcp', 'config.json');
+const cfgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'config.json');
 const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
 const { encryptPassword } = await import('../dist/sso/crypto.js');
 

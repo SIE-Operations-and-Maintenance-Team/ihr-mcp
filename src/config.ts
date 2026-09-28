@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 
 export interface Config {
@@ -20,8 +20,9 @@ const DEFAULTS = { port: 3210, host: '127.0.0.1', projectsRoot: 'F:\\项目' };
 const USERNAME_PLACEHOLDER = '在此填入ihr用户名';
 const PASSWORD_PLACEHOLDER = '在此填入ihr密码';
 
+// 配置文件位于编译产物目录（与 dist/index.js 同级）；返回模块自身目录，与启动时的工作目录无关
 export function configDir(): string {
-  return join(homedir(), '.ihr-mcp');
+  return dirname(fileURLToPath(import.meta.url));
 }
 
 export function defaultConfigPath(): string {
