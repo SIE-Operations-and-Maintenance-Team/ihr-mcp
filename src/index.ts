@@ -77,7 +77,7 @@ async function main(): Promise<void> {
   httpServer.listen(port, host, () => {
     console.error(`ihr-mcp 启动: MCP http://${host}:${port}/mcp | 管理 http://${host}:${port}/`);
     if (!cfg.configOk) {
-      console.error('警告: 程序目录 config.json 未配置凭据，工具调用将失败');
+      console.error('警告: 程序根目录 config.json 未配置凭据，工具调用将失败');
     }
   });
 }

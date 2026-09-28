@@ -40,7 +40,7 @@ async function loadStatus() {
   try {
     const s = await (await fetch('/api/status')).json();
     if (!s.configOk) {
-      el.innerHTML = '⚠️ 凭据未配置：请在程序目录 <code>config.json</code>（与 index.js 同级）填入 username/password 后重启服务';
+      el.innerHTML = '⚠️ 凭据未配置：请在程序根目录 <code>config.json</code>（与 service-install.cmd 同级）填入 username/password 后重启服务';
     } else {
       const exp = s.loggedIn ? '✅ 有效至 ' + new Date(s.tokenExpiresAt).toLocaleString() : '⏳ 未登录（首次调用时自动登录）';
       el.innerHTML = '用户：<b>' + esc(s.username) + '</b> ｜ 登录态：' + exp;

@@ -8,7 +8,7 @@ description: 填报 ihr 考勤工时。当用户要求"填报考勤/报工/工�
 ## 前置条件
 
 - ihr-mcp 服务运行中（默认 http://127.0.0.1:13210/mcp）
-- 凭据配置在程序目录 config.json（F:\GitHubs\ihr-mcp\dist\config.json，username/password）
+- 凭据配置在程序根目录 config.json（F:\GitHubs\ihr-mcp\config.json，username/password）
 - 若 `get_login_status` 返回 configOk=false，停止流程，指导用户填写配置并重启服务
 
 ## 流程

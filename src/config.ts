@@ -20,9 +20,9 @@ const DEFAULTS = { port: 13210, host: '127.0.0.1', projectsRoot: 'F:\\项目' };
 const USERNAME_PLACEHOLDER = '在此填入ihr用户名';
 const PASSWORD_PLACEHOLDER = '在此填入ihr密码';
 
-// 配置文件位于编译产物目录（与 dist/index.js 同级）；返回模块自身目录，与启动时的工作目录无关
+// 配置文件位于程序根目录（dist 的上一级，与 service-install.cmd 同级）；相对模块文件定位，与启动时的工作目录无关
 export function configDir(): string {
-  return dirname(fileURLToPath(import.meta.url));
+  return join(dirname(fileURLToPath(import.meta.url)), '..');
 }
 
 export function defaultConfigPath(): string {

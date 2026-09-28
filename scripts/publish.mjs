@@ -64,8 +64,8 @@ for (const mustExist of [
   }
 }
 for (const mustNotExist of [
-  join(stage, 'dist', 'config.json'),
-  join(stage, 'dist', 'mapping.json'),
+  join(stage, 'config.json'),
+  join(stage, 'mapping.json'),
   join(stage, 'node_modules', 'typescript'),
 ]) {
   if (existsSync(mustNotExist)) {

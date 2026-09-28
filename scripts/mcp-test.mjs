@@ -1,5 +1,5 @@
 // 手动连调：MCP 客户端 → list_tools → get_login_status。先 npm run build。
-// 服务端口/地址取程序目录 dist/config.json（缺省回落 13210/127.0.0.1）
+// 服务端口/地址取程序根目录 config.json（缺省回落 13210/127.0.0.1）
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 let port = 13210;
 let host = '127.0.0.1';
 try {
-  const cfg = JSON.parse(readFileSync(join(here, '..', 'dist', 'config.json'), 'utf8'));
+  const cfg = JSON.parse(readFileSync(join(here, '..', 'config.json'), 'utf8'));
   port = cfg.port ?? port;
   host = cfg.host ?? host;
 } catch { /* 配置不存在用默认 */ }
