@@ -1,7 +1,7 @@
 // 生成离线发布包：dist + 生产依赖 node_modules + 部署 cmd，打成 zip。
 // 同事机器无需 npm、无需联网；唯一前提是已安装 Node.js ≥20（服务运行时）。
 // 本机数据（config.json/mapping.json）不进包：凭据隔离，同事首启自动生成配置模板。
-import { cpSync, rmSync, mkdirSync, existsSync, readFileSync, readdirSync } from 'node:fs';
+import { cpSync, rmSync, mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -15,6 +15,23 @@ const zipPath = join(root, 'publish', `${name}.zip`);
 if (!existsSync(join(root, 'dist', 'index.js'))) {
   console.error('[错误] 未找到 dist/index.js，请先 npm run build');
   process.exit(1);
+}
+
+// 重打包保留已部署数据：发布目录若已就地部署（跑过程序生成 config/mapping，或装过服务），
+// 重建目录前备份这两个文件，打包（zip）完成后原样还原——部署配置跨版本保留
+const deployedCfgPath = join(stage, 'config.json');
+const deployedMapPath = join(stage, 'mapping.json');
+const preserved = existsSync(deployedCfgPath)
+  ? {
+      cfg: readFileSync(deployedCfgPath, 'utf8'),
+      map: existsSync(deployedMapPath) ? readFileSync(deployedMapPath, 'utf8') : undefined,
+    }
+  : undefined;
+if (preserved) {
+  console.log('[提示] 检测到发布目录已有 config.json/mapping.json（就地部署数据），打包后原样保留');
+}
+if (existsSync(join(stage, 'dist', 'daemon'))) {
+  console.log('[警告] 该目录已安装 Windows 服务（dist\\daemon 存在）。本次打包替换了程序代码，完成后需重启服务（ihr-service.cmd restart）加载新版本');
 }
 
 try {
@@ -52,6 +69,12 @@ execSync(
   `powershell -NoProfile -Command "Compress-Archive -Path '${stage}\\*' -DestinationPath '${zipPath}' -Force"`,
   { stdio: 'inherit' },
 );
+
+// 4.5 还原就地部署数据（zip 已生成，部署目录保留原 config/mapping；zip 内不含它们）
+if (preserved) {
+  writeFileSync(deployedCfgPath, preserved.cfg, 'utf8');
+  if (preserved.map !== undefined) writeFileSync(deployedMapPath, preserved.map, 'utf8');
+}
 
 // 5. 自检：node-windows 随包、本机数据未混入
 for (const mustExist of [
