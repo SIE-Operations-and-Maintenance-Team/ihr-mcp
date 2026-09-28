@@ -58,3 +58,10 @@ export function writeConfigTemplate(path: string = defaultConfigPath()): void {
     projectsRoot: 'F:\\项目',
   }, null, 2), 'utf8');
 }
+
+// 启动时调用：程序目录下无 config.json 才生成占位符模板（编译时不会生成配置）；已存在则不碰。返回是否新生成
+export function ensureConfigTemplate(path: string = defaultConfigPath()): boolean {
+  if (existsSync(path)) return false;
+  writeConfigTemplate(path);
+  return true;
+}

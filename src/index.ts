@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { loadConfig } from './config.js';
+import { loadConfig, ensureConfigTemplate, defaultConfigPath } from './config.js';
 import { SessionManager } from './session.js';
 import { MappingStore } from './mapping.js';
 import { createMcpServer } from './tools.js';
@@ -24,6 +24,10 @@ program
 const opts = program.opts();
 
 async function main(): Promise<void> {
+  // 执行时自动判断程序目录下是否有配置，没有才生成占位符模板（编译时不生成配置）
+  if (ensureConfigTemplate()) {
+    console.error(`已生成配置模板: ${defaultConfigPath()}，请填入 username/password 后重启`);
+  }
   const cfg = loadConfig();
   const session = new SessionManager(cfg);
   const mapping = new MappingStore();

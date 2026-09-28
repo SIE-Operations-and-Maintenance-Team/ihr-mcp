@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig, writeConfigTemplate } from '../src/config.js';
+import { loadConfig, writeConfigTemplate, ensureConfigTemplate } from '../src/config.js';
 
 function tmpPath(name: string): string {
   return join(mkdtempSync(join(tmpdir(), 'ihr-mcp-')), name);
@@ -38,5 +38,22 @@ describe('writeConfigTemplate', () => {
     writeConfigTemplate(p);
     expect(loadConfig(p).configOk).toBe(false);
     expect(loadConfig(p).port).toBe(3210);
+  });
+});
+
+describe('ensureConfigTemplate（启动时自动生成，用户指令：没有才生成）', () => {
+  it('配置不存在时生成占位符模板并返回 true', () => {
+    const p = tmpPath('auto.json');
+    expect(existsSync(p)).toBe(false);
+    expect(ensureConfigTemplate(p)).toBe(true);
+    expect(existsSync(p)).toBe(true);
+    expect(loadConfig(p).configOk).toBe(false); // 占位符 → 未配置
+    expect(loadConfig(p).port).toBe(3210);
+  });
+  it('配置已存在时不覆盖并返回 false', () => {
+    const p = tmpPath('keep.json');
+    writeFileSync(p, JSON.stringify({ username: 'real', password: 'real' }), 'utf8');
+    expect(ensureConfigTemplate(p)).toBe(false);
+    expect(loadConfig(p)).toMatchObject({ username: 'real', configOk: true }); // 未被覆盖
   });
 });
