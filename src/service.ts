@@ -20,15 +20,13 @@ export function listLocalFolders(projectsRoot: string): string[] {
   }
 }
 
-// 当前周一~周日（填报周期口径，逆向结果 §2）
-export function currentWeekRange(): { start: string; finish: string } {
+// 当月 1 日~月末：服务端按条目 startDate/endDate 与该区间求交集过滤（逆向结果 §1），
+// 周区间会漏掉"当月有效但与当前周无交集"的条目，故对齐网页"按月"视图口径
+export function currentMonthRange(): { start: string; finish: string } {
   const d = new Date();
-  const offset = (d.getDay() + 6) % 7; // 周一=0
-  const monday = new Date(d); monday.setDate(d.getDate() - offset);
-  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
   const fmt = (x: Date) =>
     `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
-  return { start: fmt(monday), finish: fmt(sunday) };
+  return { start: fmt(new Date(d.getFullYear(), d.getMonth(), 1)), finish: fmt(new Date(d.getFullYear(), d.getMonth() + 1, 0)) };
 }
 
 export async function listProjectsWithMapping(deps: {
@@ -37,7 +35,7 @@ export async function listProjectsWithMapping(deps: {
   mapping: MappingStore;
 }): Promise<ProjectView[]> {
   const http = await deps.session.getAuthedHttp();
-  const { start, finish } = currentWeekRange();
+  const { start, finish } = currentMonthRange();
   const entries = await new IhrClient(http).listEntries(start, finish);
   const folders = listLocalFolders(deps.cfg.projectsRoot);
   const manual = deps.mapping.load();
