@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig, writeConfigTemplate, ensureConfigTemplate } from '../src/config.js';
+import { loadConfig, writeConfigTemplate, ensureConfigTemplate, resolveServerAddress } from '../src/config.js';
 
 function tmpPath(name: string): string {
   return join(mkdtempSync(join(tmpdir(), 'ihr-mcp-')), name);
@@ -55,5 +55,21 @@ describe('ensureConfigTemplate（启动时自动生成，用户指令：没有�
     writeFileSync(p, JSON.stringify({ username: 'real', password: 'real' }), 'utf8');
     expect(ensureConfigTemplate(p)).toBe(false);
     expect(loadConfig(p)).toMatchObject({ username: 'real', configOk: true }); // 未被覆盖
+  });
+});
+
+describe('resolveServerAddress（监听地址优先级：命令行 > config.json > 内置默认）', () => {
+  const cfg = { port: 4000, host: '0.0.0.0' };
+  it('命令行参数优先', () => {
+    expect(resolveServerAddress(cfg, { port: '5000', host: '127.0.0.1' })).toEqual({ port: 5000, host: '127.0.0.1' });
+  });
+  it('无命令行参数时取 config.json 值', () => {
+    expect(resolveServerAddress(cfg)).toEqual({ port: 4000, host: '0.0.0.0' });
+  });
+  it('config.json 也缺省时回落内置默认 3210/127.0.0.1', () => {
+    expect(resolveServerAddress({ port: undefined as any, host: undefined as any })).toEqual({ port: 3210, host: '127.0.0.1' });
+  });
+  it('仅命令行给端口时 host 仍取 config.json', () => {
+    expect(resolveServerAddress(cfg, { port: '5000' })).toEqual({ port: 5000, host: '0.0.0.0' });
   });
 });

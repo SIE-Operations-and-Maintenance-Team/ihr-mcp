@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { loadConfig, ensureConfigTemplate, defaultConfigPath } from './config.js';
+import { loadConfig, ensureConfigTemplate, defaultConfigPath, resolveServerAddress } from './config.js';
 import { SessionManager } from './session.js';
 import { MappingStore } from './mapping.js';
 import { createMcpServer } from './tools.js';
@@ -18,8 +18,8 @@ program
   .name('ihr-mcp')
   .version('0.1.0')
   .option('-t, --transport <type>', '传输类型 (http, stdio)', 'http')
-  .option('-p, --port <number>', 'HTTP 端口', '3210')
-  .option('-h, --host <host>', '监听地址', '127.0.0.1')
+  .option('-p, --port <number>', 'HTTP 端口（优先级：命令行 > config.json > 3210）')
+  .option('-h, --host <host>', '监听地址（优先级：命令行 > config.json > 127.0.0.1）')
   .parse();
 const opts = program.opts();
 
@@ -39,7 +39,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const port = parseInt(opts.port, 10);
+  const { port, host } = resolveServerAddress(cfg, opts);
   const webApi = createWebApi({ cfg, session, mapping });
 
   const httpServer = http.createServer(async (req, res) => {
@@ -74,8 +74,8 @@ async function main(): Promise<void> {
     res.end('Not Found');
   });
 
-  httpServer.listen(port, opts.host, () => {
-    console.error(`ihr-mcp 启动: MCP http://${opts.host}:${port}/mcp | 管理 http://${opts.host}:${port}/`);
+  httpServer.listen(port, host, () => {
+    console.error(`ihr-mcp 启动: MCP http://${host}:${port}/mcp | 管理 http://${host}:${port}/`);
     if (!cfg.configOk) {
       console.error('警告: 程序目录 config.json 未配置凭据，工具调用将失败');
     }

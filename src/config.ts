@@ -65,3 +65,14 @@ export function ensureConfigTemplate(path: string = defaultConfigPath()): boolea
   writeConfigTemplate(path);
   return true;
 }
+
+// 服务监听地址优先级：命令行参数 > config.json > 内置默认（3210/127.0.0.1）
+export function resolveServerAddress(
+  cfg: { port?: number; host?: string },
+  cli?: { port?: string; host?: string },
+): { port: number; host: string } {
+  return {
+    port: cli?.port !== undefined ? parseInt(cli.port, 10) : cfg.port ?? 3210,
+    host: cli?.host !== undefined ? cli.host : cfg.host ?? '127.0.0.1',
+  };
+}
