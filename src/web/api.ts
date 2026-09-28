@@ -86,26 +86,35 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
-// 保存配置后的自重启：Windows 服务运行中走 net stop/start（分离的延时 cmd）；
-// 手动运行则延时自拉起同参数新进程（旧进程先退出释放端口，新进程延后绑定）
+// 保存配置后的自重启：分离一个 node 助手进程延时执行——不经 cmd.exe，
+// 规避 Git Bash 继承 PATH 的 Unix 工具解析（timeout/ping/tar 同源坑）与引号转义问题
+// 服务模式：助手 net stop/start（继承服务的 SYSTEM 权限）；手动模式：助手拉起同参数新进程
+const SERVICE_NAMES = ['ihr-mcp', 'ihrmcp.exe'];
+
 function scheduleRestart(): void {
   setTimeout(() => {
-    try {
-      const out = execSync('sc query ihr-mcp', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-      if (out.includes('RUNNING')) {
-        spawn('cmd.exe', ['/c', 'timeout /t 1 >nul & net stop ihr-mcp & net start ihr-mcp'], {
-          detached: true,
-          stdio: 'ignore',
-        }).unref();
-        setTimeout(() => process.exit(0), 300);
-        return;
-      }
-    } catch { /* 服务未安装或查询失败 → 按手动模式处理 */ }
-    const nodeArgs = process.argv.slice(1).map((a) => `"${a}"`).join(' ');
-    spawn('cmd.exe', ['/c', `timeout /t 2 >nul & "${process.execPath}" ${nodeArgs}`], {
-      detached: true,
-      stdio: 'ignore',
-    }).unref();
+    let serviceName: string | undefined;
+    for (const name of SERVICE_NAMES) {
+      try {
+        if (execSync(`sc query "${name}"`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).includes('RUNNING')) {
+          serviceName = name;
+          break;
+        }
+      } catch { /* 该名服务不存在，试下一个 */ }
+    }
+
+    const helper = serviceName
+      ? `const { execSync } = require('child_process');
+setTimeout(() => {
+  try { execSync('net stop "${serviceName}"'); } catch (e) {}
+  try { execSync('net start "${serviceName}"'); } catch (e) { process.exitCode = 1; }
+}, 2500);`
+      : `const { spawn } = require('child_process');
+setTimeout(() => {
+  const c = spawn(process.execPath, ${JSON.stringify(process.argv.slice(1))}, { detached: true, stdio: 'ignore', cwd: ${JSON.stringify(process.cwd())} });
+  c.unref();
+}, 2500);`;
+    spawn(process.execPath, ['-e', helper], { detached: true, stdio: 'ignore' }).unref();
     process.exit(0);
   }, 300);
 }

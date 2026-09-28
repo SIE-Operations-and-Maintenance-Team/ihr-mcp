@@ -15,11 +15,12 @@ if %errorlevel% neq 0 (
   exit /b
 )
 
-if /i "%ACTION%"=="start" net start ihr-mcp & goto :eof
-if /i "%ACTION%"=="stop" net stop ihr-mcp & goto :eof
+REM 兼容两种安装名：新装 id=ihr-mcp；历史安装为 ihrmcp.exe
+if /i "%ACTION%"=="start" (net start ihr-mcp 2>nul & net start ihrmcp.exe) & goto :eof
+if /i "%ACTION%"=="stop" (net stop ihr-mcp 2>nul & net stop ihrmcp.exe 2>nul) & goto :eof
 if /i "%ACTION%"=="restart" (
-  net stop ihr-mcp
-  net start ihr-mcp
+  net stop ihr-mcp 2>nul & net stop ihrmcp.exe 2>nul
+  (net start ihr-mcp 2>nul || net start ihrmcp.exe)
   goto :eof
 )
 
