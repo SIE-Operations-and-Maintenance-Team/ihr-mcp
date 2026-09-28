@@ -143,7 +143,30 @@ ZCode：编辑 `%USERPROFILE%\.zcode\cli\config.json` 的 `mcp.servers` 段：
 
 负责人机器上双击 **`publish.cmd`**：生成 `publish\ihr-mcp-v<版本>.zip`，内含编译产物、生产依赖（node-windows 等，同事机器无需 npm/联网）、部署 cmd 与 skill 源。本机凭据与映射数据不会进包。
 
-发布目录可就地部署（解压/安装/运行）。**重新打包时会保留该目录已生成的 config.json/mapping.json**（部署配置跨版本保留），但程序代码会被替换——若已安装 Windows 服务，打包完成后执行 `ihr-service.cmd restart` 加载新版本。建议服务从长期固定的目录安装，不要从 `publish\` 临时目录安装。
+发布目录可就地部署。对同一个版本目录重新打包前，先运行该目录的 `ihr-service.cmd stop` 并确认实际服务已停止，再执行 `publish.cmd`。打包程序核对服务注册路径与守护配置，将 `config.json`、`mapping.json` 和有效的 `dist/daemon` 守护文件备份到发布目录同级的 `.ihr-deploy-backup-*` 目录。纯净 ZIP 校验完成后还原这些文件；ZIP 不包含本机配置或守护。只有打包成功后才运行 `ihr-service.cmd start`。失败时保持停服，按输出的备份位置恢复配置与守护，并先确认应用文件完整；本流程不提供整个应用的自动回滚。
+
+若发现孤立或损坏的守护，先核对目标部署目录，再执行 `service-uninstall.cmd` → `service-install.cmd` 恢复，不能直接忽略错误继续打包。卸载会在确认注册消失后将守护移到 `.ihr-service-backup-*` 目录，保留程序与配置。备份可能含本机配置，只在本机保留，确认无需恢复后再清理，不随发布包分发。
+
+版本号改变会生成另一个目录，旧服务继续指向旧目录，配置与服务不会自动迁移。建议从长期固定的目录安装服务；需要迁移时明确处理旧部署后再安装新部署。
+
+### 发布失败恢复
+
+npm、复制或压缩失败可能使 stage 内的脚本和依赖不完整。应从完整的打包仓库根目录调用共用模块，并使用报错给出的备份路径；只处理同一版本目录，并在服务停止后执行：
+
+```powershell
+$env:IHR_RECOVER_STAGE = Read-Host '输入失败发布的 stage 绝对路径'
+$env:IHR_RECOVER_BACKUP = Read-Host '输入本次报错输出的 .ihr-deploy-backup-* 绝对路径'
+node --input-type=module -e "import {readFileSync} from 'node:fs'; import {join} from 'node:path'; import {serviceFor,normalizePath} from './scripts/service-state.mjs'; import {restoreBackup} from './scripts/publish-preserve.mjs'; const root=process.env.IHR_RECOVER_STAGE; const expected=join(process.cwd(),'publish','ihr-mcp-v'+JSON.parse(readFileSync('package.json','utf8')).version); if(normalizePath(root)!==normalizePath(expected)) throw new Error('目标不是本仓库当前版本的 stage，请按迁移流程处理'); const svc=serviceFor(root); if(svc && svc.State!=='Stopped') throw new Error('先停止关联服务'); restoreBackup(root,process.env.IHR_RECOVER_BACKUP);"
+if ($LASTEXITCODE -ne 0) { throw '备份还原失败，保持停服并保留现场' }
+node --input-type=module -e "import {uninstallService} from './scripts/service-control.mjs'; await uninstallService(process.env.IHR_RECOVER_STAGE);"
+if ($LASTEXITCODE -ne 0) { throw '残留服务处理失败，保留现场' }
+node scripts/publish.mjs
+if ($LASTEXITCODE -ne 0) { throw '重新构建仍失败，保持停服并保留新旧备份' }
+node --input-type=module -e "import {installService} from './scripts/service-control.mjs'; await installService(process.env.IHR_RECOVER_STAGE);"
+if ($LASTEXITCODE -ne 0) { throw '服务未通过恢复验收，请检查状态与日志' }
+```
+
+此流程保留配置并重新生成应用目录，不提供完整应用回滚。不要自动选择“最新备份”；版本目录变化时按迁移流程处理。
 
 ## 常见问题
 
@@ -152,7 +175,7 @@ ZCode：编辑 `%USERPROFILE%\.zcode\cli\config.json` 的 `mcp.servers` 段：
 | 工具报"凭据未配置: 请填写 …config.json…" | 按报错中的路径填入 username/password，重启服务 |
 | 登录失败 [code=40009] | 密码已过期，到统一认证中心重置后更新 config.json |
 | 登录失败 账号或密码错误 [code=40001] | 核对 config.json 凭据（报错末尾附有配置文件路径） |
-| 端口被占用 | 服务安装脚本会自动结束旧实例；或改 config.json 的 `port` |
+| 端口被占用 | 安装/启动会报告冲突，不会强杀 PID。核实占用者后有序停止目标实例，或修改配置端口；不要结束无关进程。 |
 | 提交报"已存在工时填报申请单" | 该日已填报（项目经理代报或重复提交），跳过该日即可 |
 | ihr 页面改版后工具报错 | 接口路径/字段集中在 `src/ihr/client.ts` 常量区与 `doc/` 逆向文档，按新页面重新逆向修正 |
 

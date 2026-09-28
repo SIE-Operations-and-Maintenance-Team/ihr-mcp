@@ -1,103 +1,89 @@
-// 生成离线发布包：dist + 生产依赖 node_modules + 部署 cmd，打成 zip。
-// 同事机器无需 npm、无需联网；唯一前提是已安装 Node.js ≥20（服务运行时）。
-// 本机数据（config.json/mapping.json）不进包：凭据隔离，同事首启自动生成配置模板。
-import { cpSync, rmSync, mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { cpSync, rmSync, mkdirSync, existsSync, readFileSync, renameSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, join, resolve } from 'node:path';
+import { withPreservedDeployment } from './publish-preserve.mjs';
+import { powerShellJson, normalizePath } from './service-state.mjs';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-const name = `ihr-mcp-v${pkg.version}`;
-const stage = join(root, 'publish', name);
-const zipPath = join(root, 'publish', `${name}.zip`);
+export function publish(repoRoot) {
+  const root = resolve(repoRoot);
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  if (!/^[0-9A-Za-z.+-]+$/.test(pkg.version)) throw new Error('版本号不能构成目录路径');
+  if (!existsSync(join(root, 'dist', 'index.js'))) throw new Error('请先执行 npm run build');
+  const name = 'ihr-mcp-v' + pkg.version;
+  const stage = join(root, 'publish', name);
+  const zipPath = join(root, 'publish', name + '.zip');
+  const pendingZip = join(root, 'publish', name + '.pending.zip');
+  if (!normalizePath(stage).startsWith(normalizePath(join(root, 'publish')) + '\\')) {
+    throw new Error('发布目录越界');
+  }
+  let outcome;
+  try {
+    outcome = withPreservedDeployment(stage, () => {
+      // 失败就退出保护区并还原，不在部分删除后再无条件清空每一个条目。
+      rmSync(stage, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      rmSync(pendingZip, { force: true, maxRetries: 5, retryDelay: 200 });
+      mkdirSync(join(stage, 'dist'), { recursive: true });
+      cpSync(join(root, 'dist'), join(stage, 'dist'), {
+        recursive: true,
+        filter: src => {
+          const rel = src.slice(root.length).replaceAll('\\', '/');
+          return !/^\/dist\/daemon(\/|$)/.test(rel)
+            && !src.endsWith('config.json') && !src.endsWith('mapping.json');
+        },
+      });
+      for (const file of ['package.json', 'package-lock.json'])
+        cpSync(join(root, file), join(stage, file));
+      execSync('npm ci --omit=dev', { cwd: stage, stdio: 'inherit', windowsHide: true });
+      cpSync(join(root, 'scripts'), join(stage, 'scripts'), { recursive: true });
+      for (const file of ['service-install.cmd', 'service-uninstall.cmd', 'ihr-service.cmd'])
+        cpSync(join(root, file), join(stage, file));
+      cpSync(join(root, 'skill'), join(stage, 'skill'), { recursive: true });
 
-if (!existsSync(join(root, 'dist', 'index.js'))) {
-  console.error('[错误] 未找到 dist/index.js，请先 npm run build');
-  process.exit(1);
-}
-
-// 重打包保留已部署数据：发布目录若已就地部署（跑过程序生成 config/mapping，或装过服务），
-// 重建目录前备份这两个文件，打包（zip）完成后原样还原——部署配置跨版本保留
-const deployedCfgPath = join(stage, 'config.json');
-const deployedMapPath = join(stage, 'mapping.json');
-const preserved = existsSync(deployedCfgPath)
-  ? {
-      cfg: readFileSync(deployedCfgPath, 'utf8'),
-      map: existsSync(deployedMapPath) ? readFileSync(deployedMapPath, 'utf8') : undefined,
+      for (const rel of ['node_modules/node-windows', 'dist/index.js', 'service-install.cmd']) {
+        if (!existsSync(join(stage, rel))) throw new Error('发布包缺少 ' + rel);
+      }
+      for (const rel of ['config.json', 'mapping.json', 'dist/daemon', 'node_modules/typescript']) {
+        if (existsSync(join(stage, rel))) throw new Error('发布包混入本机文件或开发依赖：' + rel);
+      }
+      powerShellJson([
+        '$paths = @(Get-ChildItem -LiteralPath $env:IHR_PUBLISH_STAGE | Select-Object -ExpandProperty FullName)',
+        'Compress-Archive -LiteralPath $paths -DestinationPath $env:IHR_PUBLISH_ZIP -Force -ErrorAction Stop',
+        'Add-Type -AssemblyName System.IO.Compression.FileSystem',
+        '$archive = [System.IO.Compression.ZipFile]::OpenRead($env:IHR_PUBLISH_ZIP)',
+        'try {',
+        '  $names = @($archive.Entries | ForEach-Object { $_.FullName.Replace("\\", "/") })',
+        '  if ($names | Where-Object { $_ -match "^(config\\.json|mapping\\.json)$|^dist/daemon(/|$)|^node_modules/typescript(/|$)" }) { throw "ZIP contains local data or dev dependencies" }',
+        '  foreach ($required in @("dist/index.js", "service-install.cmd", "node_modules/node-windows/package.json")) {',
+        '    if ($names -notcontains $required) { throw ("ZIP missing " + $required) }',
+        '  }',
+        '} finally { $archive.Dispose() }',
+        'ConvertTo-Json -InputObject $true',
+      ], { IHR_PUBLISH_STAGE: stage, IHR_PUBLISH_ZIP: pendingZip }, 120000);
+      return pendingZip;
+    });
+    // 仅在归档校验和部署还原均成功后发布最终文件；不预先删除旧有效包。
+    renameSync(pendingZip, zipPath);
+  } catch (error) {
+    try { rmSync(pendingZip, { force: true, maxRetries: 5, retryDelay: 200 }); }
+    catch (cleanupError) {
+      throw new AggregateError([error, cleanupError],
+        '发布失败且临时 ZIP 清理失败，禁止分发：' + pendingZip);
     }
-  : undefined;
-if (preserved) {
-  console.log('[提示] 检测到发布目录已有 config.json/mapping.json（就地部署数据），打包后原样保留');
-}
-if (existsSync(join(stage, 'dist', 'daemon'))) {
-  console.log('[警告] 该目录已安装 Windows 服务（dist\\daemon 存在）。本次打包替换了程序代码，完成后需重启服务（ihr-service.cmd restart）加载新版本');
+    throw error;
+  }
+  console.log('[完成] 发布包：' + zipPath);
+  if (outcome.backupDir) console.log('[说明] 部署备份：' + outcome.backupDir);
+  console.log('[说明] 原服务保持停止；确认发布成功后执行 ihr-service.cmd start。');
+  console.log('[说明] 同事解压后运行 service-install.cmd；需 Node.js ≥20；本机配置未进入 ZIP。');
+  console.log('[说明] 考勤 skill 源在包内 skill/ihr-attendance，按所用 agent 的技能目录安装。');
+  return zipPath;
 }
 
-try {
-  rmSync(stage, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-} catch {
-  // 目录被占用（典型：某个命令行窗口的当前目录停在该目录内）——清空内容后复用目录
-  console.log('[提示] 发布目录被占用，清空内容后复用（可关闭停留在该目录的命令行窗口）');
-  for (const e of readdirSync(stage)) {
-    rmSync(join(stage, e), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  try { publish(join(dirname(fileURLToPath(import.meta.url)), '..')); }
+  catch (error) {
+    console.error('[错误] ' + error.message);
+    process.exitCode = 1;
   }
 }
-rmSync(zipPath, { force: true, maxRetries: 5, retryDelay: 200 });
-mkdirSync(join(stage, 'dist'), { recursive: true });
-
-// 1. dist（排除本机数据）
-cpSync(join(root, 'dist'), join(stage, 'dist'), {
-  recursive: true,
-  filter: (src) => !src.endsWith('config.json') && !src.endsWith('mapping.json'),
-});
-
-// 2. 生产依赖（npm ci 按 lockfile 精确安装；打包机需要 registry 访问，同事机器不需要）
-cpSync(join(root, 'package.json'), join(stage, 'package.json'));
-cpSync(join(root, 'package-lock.json'), join(stage, 'package-lock.json'));
-execSync('npm ci --omit=dev', { cwd: stage, stdio: 'inherit' });
-
-// 3. 部署脚本、cmd 与 skill 源
-cpSync(join(root, 'scripts'), join(stage, 'scripts'), { recursive: true });
-for (const f of ['service-install.cmd', 'service-uninstall.cmd', 'ihr-service.cmd']) {
-  cpSync(join(root, f), join(stage, f));
-}
-cpSync(join(root, 'skill'), join(stage, 'skill'), { recursive: true });
-
-// 4. 打 zip（PowerShell Compress-Archive：Windows 自带；execSync 走 cmd.exe 时 tar 会解析到 Git Bash 的 GNU tar，对 zip 不可靠）
-execSync(
-  `powershell -NoProfile -Command "Compress-Archive -Path '${stage}\\*' -DestinationPath '${zipPath}' -Force"`,
-  { stdio: 'inherit' },
-);
-
-// 4.5 还原就地部署数据（zip 已生成，部署目录保留原 config/mapping；zip 内不含它们）
-if (preserved) {
-  writeFileSync(deployedCfgPath, preserved.cfg, 'utf8');
-  if (preserved.map !== undefined) writeFileSync(deployedMapPath, preserved.map, 'utf8');
-}
-
-// 5. 自检：node-windows 随包、本机数据未混入
-for (const mustExist of [
-  join(stage, 'node_modules', 'node-windows'),
-  join(stage, 'dist', 'index.js'),
-  join(stage, 'service-install.cmd'),
-]) {
-  if (!existsSync(mustExist)) {
-    console.error(`[错误] 发布包缺少 ${mustExist}`);
-    process.exit(1);
-  }
-}
-for (const mustNotExist of [
-  join(stage, 'config.json'),
-  join(stage, 'mapping.json'),
-  join(stage, 'node_modules', 'typescript'),
-]) {
-  if (existsSync(mustNotExist)) {
-    console.error(`[错误] 发布包混入了不该带的内容: ${mustNotExist}`);
-    process.exit(1);
-  }
-}
-
-console.log(`[完成] 发布包: ${zipPath}`);
-console.log('[说明] 同事解压后双击 service-install.cmd 即可；机器需已安装 Node.js ≥20。首次启动自动生成 config.json 模板，填入账号密码后 ihr-service.cmd restart');
-console.log('[说明] 填报考勤 skill 源在包内 skill\\ihr-attendance\\，按所用 agent 的技能目录安装：ZCode → %USERPROFILE%\\.zcode\\skills\\，Claude Code → %USERPROFILE%\\.claude\\skills\\，通用 → %USERPROFILE%\\.agents\\skills\\（目录名保持 ihr-attendance）');

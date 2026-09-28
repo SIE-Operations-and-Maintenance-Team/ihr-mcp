@@ -1,17 +1,16 @@
 @echo off
 chcp 65001 >nul
+setlocal
 title ihr-mcp 服务卸载
-
 net session >nul 2>&1
-if %errorlevel% neq 0 (
-  echo [提示] 卸载 Windows 服务需要管理员权限，正在请求提升...
-  powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
-  exit /b
-)
-
+if errorlevel 1 goto elevate
 cd /d "%~dp0"
-
-echo 正在卸载 ihr-mcp Windows 服务（会先自动停止）...
 node scripts\service-uninstall.mjs
+set "IHR_TASK_EXIT=%errorlevel%"
 echo.
 pause
+exit /b %IHR_TASK_EXIT%
+:elevate
+set "IHR_ELEVATE_SCRIPT=%~f0"
+powershell -NoProfile -Command "$ErrorActionPreference='Stop'; $p=Start-Process -FilePath $env:IHR_ELEVATE_SCRIPT -Verb RunAs -Wait -PassThru; exit $p.ExitCode"
+exit /b %errorlevel%
