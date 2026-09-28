@@ -29,6 +29,7 @@ try {
 
 const service = new Service({
   name: 'ihr-mcp',
+  id: 'ihr-mcp', // 显式指定服务内部名（不设时 node-windows 会生成 ihrmcp.exe 之类的名字）
   description: 'ihr 考勤自动填报 MCP 服务端（Streamable HTTP + Web 管理页）',
   script: join(root, 'dist', 'index.js'),
   scriptOptions: '-t http',
