@@ -1,0 +1,183 @@
+# ihr-mcp
+
+赛意 iHR 考勤自动填报 MCP 服务端 + 配对填报考勤 skill。
+
+对接 `https://ihr.chinasie.com`（赛意统一认证 SSO + 考勤工时模块），把"打开网页→选项目→逐日填工时"变成一句话：agent 扫描本地项目文档 → 生成考勤填报文档 → 用户确认 → 自动提交。
+
+- **传输协议**：Streamable HTTP（`/mcp` 端点，任意支持 MCP 的客户端可接入）+ Web 管理页面
+- **技术栈**：Node.js ≥20、TypeScript、`@modelcontextprotocol/sdk`
+- **配套 skill**：`skill/ihr-attendance/`（教 agent 走完整填报流程，已做 agent 无关化，不绑定 ZCode）
+
+## 功能特性
+
+- **SSO 自动登录**：复用统一认证中心接口（AES 加密密码），token 缓存 7 天，失效/被吊销自动重登重试
+- **报工条目获取**：按周拉取可填报项目，解析项目编号/名称/活动类型，自动推断项目归属客户（可手动修正）
+- **考勤提交**：按周一~周日自动分组、逐周批量提交；工作日默认"工时"，周末/节假日支持"加班"类型；交付类型与实施地点自动带出（可覆盖）
+- **Web 管理页**：登录状态、项目列表、项目↔客户映射修正（一键保存）
+- **配对 skill**：扫描本地项目 doc 文档 → 归纳每日工作 → 生成考勤填报文档 → **用户硬性确认后**自动提交
+- **Windows 服务部署**：一条 cmd 装成系统服务（开机自启）；离线发布包打包，同事零依赖安装
+
+## 环境要求
+
+- Node.js **≥ 20**（服务运行时；安装服务/填报表的机器都需要）
+- Windows（服务部署与发布打包；Linux/macOS 下 `node dist/index.js` 亦可运行服务本体）
+
+## 快速开始（发布包部署，推荐给使用同事）
+
+1. 拿到发布包 `ihr-mcp-v<版本>.zip`（由负责人 `publish.cmd` 生成），解压到任意目录
+2. 双击 **`service-install.cmd`**（UAC 点"是"）——自动安装并启动 Windows 服务
+3. 首次启动会在解压目录生成 `config.json` 模板，填入 ihr 的 `username` / `password`
+4. 双击 **`ihr-service.cmd`**，选择 restart（或管理员命令行执行 `ihr-service.cmd restart`）
+5. 浏览器打开管理页 `http://127.0.0.1:13210/` 确认登录状态与项目列表
+6. 在你的 MCP 客户端注册 ihr 服务（见下文），并安装填报考勤 skill（见下文）
+
+## 从源码运行（开发）
+
+```bash
+npm install
+npm run build
+node dist/index.js -t http        # 前台运行；npm start 等价
+```
+
+首次启动自动在程序根目录生成 `config.json` 模板，填入凭据后重启。开发调试可用 `node dist/index.js -t stdio` 走标准输入输出传输。
+
+## 配置
+
+配置文件：**程序根目录 `config.json`**（与 `service-install.cmd` 同级）。不存在时程序启动自动生成模板；已存在则不覆盖。
+
+```json
+{
+  "username": "ihr用户名（工号/手机号）",
+  "password": "ihr密码",
+  "port": 13210,
+  "host": "127.0.0.1",
+  "projectsRoot": "F:\\项目"
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `username` / `password` | ihr 登录凭据（明文存本机；该文件已被 .gitignore 排除，不入库、不进发布包） |
+| `port` / `host` | 服务监听地址，优先级：命令行 `-p/-h` > config.json > 默认（13210/127.0.0.1） |
+| `projectsRoot` | 本地项目根目录（skill 扫描 doc 工作文档、Web 页客户下拉的来源） |
+
+另有 `mapping.json`（同目录）保存"项目编号 → 客户名"的手动映射，可在 Web 页修改，也可由 `set_customer_mapping` 工具写入。
+
+> 改完配置需重启服务生效：`ihr-service.cmd restart`（或手动重启进程）。
+
+## MCP 客户端接入
+
+服务地址：`http://127.0.0.1:<port>/mcp`（Streamable HTTP）。
+
+ZCode：编辑 `%USERPROFILE%\.zcode\cli\config.json` 的 `mcp.servers` 段：
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "ihr": {
+        "type": "http",
+        "url": "http://127.0.0.1:13210/mcp"
+      }
+    }
+  }
+}
+```
+
+其他支持 MCP 的客户端（Claude Code 等）按各自格式注册同一 URL 即可。
+
+## MCP 工具（6 个）
+
+| 工具 | 入参 | 说明 |
+|------|------|------|
+| `get_login_status` | 无 | 登录状态、凭据配置检查；返回 `configPath`（配置文件绝对路径） |
+| `get_config` | 无 | 非敏感运行配置（`projectsRoot`）。**凭据永不出 MCP** |
+| `list_projects` | 无 | 当前周可填报项目：`{projectCode, projectName, activityType, customer, customerSource, ...}` |
+| `get_customer_mapping` | 无 | 项目编号→客户名映射表 |
+| `set_customer_mapping` | `{projectCode, customer}` | 修正项目↔客户映射（覆盖自动推断） |
+| `fill_work_hours` | `{entries: [...]}` | 批量提交考勤，自动按周一~周日分周批量提交。每项：`{date, projectCode, activityType, hours, workContent, type?(工时=默认/加班=非工作日), tsDeliveryType?(默认项目地交付), areaId?, area?}` |
+
+提交语义与防护：周级批量全或无；`configOk=false` 时快速失败并携带配置文件绝对路径；token 失效自动重登后重试一次，已成功周不会重复提交。
+
+## Web 管理页
+
+`http://127.0.0.1:<port>/`
+
+- 登录状态卡片（凭据未配置时提示配置文件位置）
+- 项目列表：编号、名称、活动类型、**客户下拉修正**（来源标注：手动/推断/未匹配）
+- 修改客户下拉即保存到 mapping.json，后续 `list_projects` 与填报自动生效
+
+## 填报考勤 skill（ihr-attendance）
+
+`skill/ihr-attendance/SKILL.md`，按所用 agent 的技能目录安装（**目录名保持 `ihr-attendance`**）：
+
+| agent | 安装到 |
+|-------|--------|
+| ZCode | `%USERPROFILE%\.zcode\skills\ihr-attendance\` |
+| Claude Code | `%USERPROFILE%\.claude\skills\ihr-attendance\` |
+| 通用（跨工具） | `%USERPROFILE%\.agents\skills\ihr-attendance\` |
+
+安装后对 agent 说"**填报考勤**"即可。skill 流程：
+
+1. 检查登录态（未配置凭据时按 `configPath` 指导填写，agent 不接触密码）
+2. 动态获取项目根目录（`get_config.projectsRoot`），扫描各项目 `doc/` 下的工作文档（前缀/后缀日期双命名匹配，跨月合并）
+3. 归纳每日工作 → 匹配 ihr 项目（映射表优先；**一客户多项目时归属判断必须经用户逐条确认**）
+4. 生成考勤填报文档（`<projectsRoot>\doc\` 下，含工时/项目/活动类型/类型列）
+5. 【硬性关口】等用户确认或修改文档（重点提示多项目归属行、周末/节假日行）
+6. 确认后自动提交，逐条汇报结果，文档追加"已提交"标记防重复
+
+## Windows 服务管理
+
+| 操作 | 方式 |
+|------|------|
+| 安装并启动 | 双击 `service-install.cmd`（自提升管理员权限） |
+| 卸载 | `service-uninstall.cmd` |
+| 启动/停止/重启/状态 | `ihr-service.cmd start\|stop\|restart\|status` |
+
+服务基于 node-windows（随发布包分发，同事机器无需额外下载）。更新代码后：`npm run build` → `ihr-service.cmd restart`。
+
+## 打包发布给同事
+
+负责人机器上双击 **`publish.cmd`**：生成 `publish\ihr-mcp-v<版本>.zip`，内含编译产物、生产依赖（node-windows 等，同事机器无需 npm/联网）、部署 cmd 与 skill 源。本机凭据与映射数据不会进包。
+
+## 常见问题
+
+| 现象 | 处理 |
+|------|------|
+| 工具报"凭据未配置: 请填写 …config.json…" | 按报错中的路径填入 username/password，重启服务 |
+| 登录失败 [code=40009] | 密码已过期，到统一认证中心重置后更新 config.json |
+| 登录失败 账号或密码错误 [code=40001] | 核对 config.json 凭据（报错末尾附有配置文件路径） |
+| 端口被占用 | 服务安装脚本会自动结束旧实例；或改 config.json 的 `port` |
+| 提交报"已存在工时填报申请单" | 该日已填报（项目经理代报或重复提交），跳过该日即可 |
+| ihr 页面改版后工具报错 | 接口路径/字段集中在 `src/ihr/client.ts` 常量区与 `doc/` 逆向文档，按新页面重新逆向修正 |
+
+## 项目文档
+
+- [doc/20260926-ihr-mcp设计文档.md](doc/20260926-ihr-mcp设计文档.md) — 架构、模块、数据流
+- [doc/20260926-ihr-mcp实施计划.md](doc/20260926-ihr-mcp实施计划.md) — 任务拆解与历次修订记录
+- [doc/20260926-ihr接口逆向结果.md](doc/20260926-ihr接口逆向结果.md) — SSO/考勤接口实证（鉴权、字段映射、交付类型矩阵）
+
+## 目录结构
+
+```
+ihr-mcp/
+├── service-install.cmd / service-uninstall.cmd / ihr-service.cmd   # Windows 服务
+├── publish.cmd                    # 离线发布包打包
+├── config.json / mapping.json     # 运行配置（本机生成，不入库）
+├── skill/ihr-attendance/SKILL.md  # 填报考勤 skill 源
+├── src/
+│   ├── index.ts                   # 入口：/mcp + /api/* + Web 页
+│   ├── config.ts session.ts mapping.ts service.ts tools.ts
+│   ├── sso/                       # SSO 密码加密与登录
+│   ├── ihr/                       # ihr 接口客户端与条目解析
+│   └── web/                       # 管理页面
+├── scripts/                       # 服务安装/连调/发布脚本
+├── test/                          # vitest 单元测试
+└── doc/                           # 设计/计划/逆向文档
+```
+
+## 安全说明
+
+- 凭据明文保存于本机 `config.json`（内网个人电脑场景；如需可扩展 DPAPI 加密）
+- `config.json` / `mapping.json` / `publish\` 均被 .gitignore 排除，永不入库、不进发布包
+- MCP 端点与服务仅绑定 127.0.0.1；Web 接口校验 Host 防跨主机访问
