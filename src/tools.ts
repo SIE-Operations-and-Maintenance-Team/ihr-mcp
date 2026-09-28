@@ -5,7 +5,7 @@ import {
   McpError,
   ErrorCode,
 } from '@modelcontextprotocol/sdk/types.js';
-import { LoadConfigResult } from './config.js';
+import { LoadConfigResult, defaultConfigPath } from './config.js';
 import { SessionManager } from './session.js';
 import { MappingStore } from './mapping.js';
 import { listProjectsWithMapping } from './service.js';
@@ -35,6 +35,13 @@ function isFillArgs(args: any): args is { entries: FillEntry[] } {
       (e?.areaId === undefined || typeof e.areaId === 'string') &&
       (e?.area === undefined || typeof e.area === 'string'),
   );
+}
+
+// 凭据未配置时快速失败（不拿占位符去撞 SSO 得到误导性的"账号或密码错误"），报错携带配置文件绝对路径
+export function requireConfigOk(deps: ToolDeps): void {
+  if (!deps.cfg.configOk) {
+    throw new McpError(ErrorCode.InternalError, `凭据未配置: 请填写 ${defaultConfigPath()} 的 username/password 后重启服务`);
+  }
 }
 
 // ihr 服务端吊销 token 时返回 errorCode=401（IhrClient.call() 抛出该形态消息）：
@@ -130,9 +137,11 @@ export function createMcpServer(deps: ToolDeps): Server {
             loggedIn: t.loggedIn,
             username: deps.cfg.username,
             tokenExpiresAt: t.tokenExpiresAt,
+            configPath: defaultConfigPath(),
           });
         }
         case 'list_projects':
+          requireConfigOk(deps);
           return ok({ projects: await withReauth(deps, () => listProjectsWithMapping(deps)) });
         case 'get_customer_mapping':
           return ok({ mapping: deps.mapping.load() });
@@ -144,6 +153,7 @@ export function createMcpServer(deps: ToolDeps): Server {
           return ok({ ok: true });
         }
         case 'fill_work_hours': {
+          requireConfigOk(deps);
           if (!isFillArgs(args)) {
             throw new McpError(ErrorCode.InvalidParams, 'entries 参数不合法');
           }

@@ -34,6 +34,12 @@ describe('SessionManager', () => {
     const sm = new SessionManager(cfg, fake as any);
     await expect(sm.ensureLogin()).rejects.toThrow('重置');
   });
+  it('登录失败信息追加凭据配置路径（用户指令）', async () => {
+    const fake = new FakeSso();
+    fake.result = { success: false, errorCode: '40001', errorMsg: '账号或密码错误', passwordExpired: false };
+    const sm = new SessionManager(cfg, fake as any);
+    await expect(sm.ensureLogin()).rejects.toThrow(/凭据配置: .+config\.json/);
+  });
   it('invalidate 清除 token，ensureLogin 重新登录（服务端吊销 401 恢复路径）', async () => {
     const fake = new FakeSso();
     const sm = new SessionManager(cfg, fake as any);

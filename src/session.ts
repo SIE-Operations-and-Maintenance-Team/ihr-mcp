@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
 import { SsoClient } from './sso/client.js';
-import { Config } from './config.js';
+import { Config, defaultConfigPath } from './config.js';
 
 // isRememberMe=true 时 SSO token 有效期 7 天，提前 1 分钟视为过期
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -29,7 +29,7 @@ export class SessionManager {
     const r = await this.sso.login(this.cfg.username, this.cfg.password);
     if (!r.success) {
       const hint = r.passwordExpired ? '（密码已过期，请到 https://my.chinasie.com/certification/ 重置）' : '';
-      throw new Error(`ihr 登录失败: ${r.errorMsg} [code=${r.errorCode}]${hint}`);
+      throw new Error(`ihr 登录失败: ${r.errorMsg} [code=${r.errorCode}]${hint}（凭据配置: ${defaultConfigPath()}）`);
     }
     this.token = r.token!;
     this.tokenExpiresAt = Date.now() + TOKEN_TTL_MS - 60_000;
