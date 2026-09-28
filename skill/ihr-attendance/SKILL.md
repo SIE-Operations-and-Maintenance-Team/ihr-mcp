@@ -9,11 +9,12 @@ description: 填报 ihr 考勤工时。当用户要求"填报考勤/报工/工�
 
 - 本 skill 只编排流程、调用 ihr MCP 工具、与用户交互；**不读写任何配置文件，不接触用户名密码**（凭据由 ihr-mcp 服务端管理）
 - **不含任何硬编码路径与地址**：本地路径一律动态取自 MCP 工具返回值——项目根目录用 `get_config` 的 `projectsRoot`，配置文件位置用 `get_login_status` 的 `configPath`
-- 不假设 MCP 服务的地址与端口（注册与连接由 ZCode 客户端配置管理，agent 只按工具名调用）
+- 不假设 MCP 服务的地址与端口（注册与连接由所用 MCP 客户端配置管理，agent 只按工具名调用）
+- 适用于任何支持 MCP 的 agent（ZCode、Claude Code 等），不绑定特定工具
 
 ## 前置条件
 
-- ZCode 已注册 ihr MCP 服务（可用工具：`get_login_status` / `get_config` / `list_projects` / `get_customer_mapping` / `fill_work_hours`）
+- 所用 MCP 客户端已注册 ihr MCP 服务（可用工具：`get_login_status` / `get_config` / `list_projects` / `get_customer_mapping` / `fill_work_hours`）。若工具不可用，提示用户先启动 ihr-mcp 并在客户端注册
 
 ## 流程
 
@@ -31,10 +32,18 @@ description: 填报 ihr 考勤工时。当用户要求"填报考勤/报工/工�
 
 ### 3. 扫描工作文档
 
-在 Git Bash 执行（示例为 2026 年 9 月；`<P>` 用第 1 步的 projectsRoot 替换；同时匹配前缀日期 `20260901-xxx.md` 与后缀日期 `bug-diagnosis-xxx-20260901.md` 两种命名习惯）：
+`<P>` 用第 1 步的 projectsRoot 替换。按所用 shell 选一种（示例为 2026 年 9 月；同时匹配前缀日期 `20260901-xxx.md` 与后缀日期 `bug-diagnosis-xxx-20260901.md` 两种命名习惯）：
+
+Git Bash / WSL / 类 Unix shell：
 
 ```bash
 find "<P>" -path "*/doc/*" -type f \( -name "202609*.md" -o -name "*-202609*.md" \)
+```
+
+Windows PowerShell：
+
+```powershell
+Get-ChildItem "<P>" -Recurse -File -Filter *.md | Where-Object { $_.FullName -match '\\doc\\' -and $_.Name -match '^(202609\d\d-.*|.*-202609\d\d)\.md$' } | ForEach-Object FullName
 ```
 
 周期跨月时（如"上周"横跨 8/9 月）对每个月份前缀各执行一次并合并结果。若担心仍有遗漏，用 mtime 补扫一遍与按名结果合并去重：
@@ -54,22 +63,24 @@ find "<P>" -path "*/doc/*" -name "*.md" -type f -newermt 2026-09-01 ! -newermt 2
 
 ### 5. 生成考勤填报文档
 
-写入 `<P>/doc/<今天yyyymmdd>-考勤填报-<YYYY年M月>.md`，表格格式**必须严格**如下（后续按表格解析提交）：
+写入 `<P>/doc/<今天yyyymmdd>-考勤填报-<YYYY年M月>.md`，表格格式**必须严格**如下（后续按表格解析提交；`类型` 列=提交时 `fill_work_hours` 的 `type`）：
 
 ```markdown
 # <YYYY年M月>考勤填报（待确认）
 
-| 日期 | 工时 | 项目编号 | 活动类型 | 工作内容 |
-|------|------|---------|---------|---------|
-| 2026-09-01 | 8 | SD26040155 | 项目执行 | 方正微QMS：xxx修复（doc/20260901-xxx.md） |
+| 日期 | 工时 | 项目编号 | 活动类型 | 类型 | 工作内容 |
+|------|------|---------|---------|------|---------|
+| 2026-09-01 | 8 | SD26040155 | 项目执行 | 工时 | 方正微QMS：xxx修复（doc/20260901-xxx.md） |
+| 2026-09-06 | 4 | SD26040155 | 项目执行 | 加班 | 方正微QMS：上线值守（doc/20260906-xxx.md） |
 ```
 
 规则：
-- 工作日默认 8 小时；周末不填报
-- 法定节假日/调休无法准确判断，将周期内疑似节假日列出来提醒用户确认
+- 工作日默认 8 小时
+- **周末由用户确认是否填报，不静默跳过**：文档显示周末有工作痕迹 → 生成 `加班` 行（提交时 `type: "加班"`，hours 按文档量推断并标注"(建议)"），并在确认关口单独列出"周末 X 天是否填报、各报几小时"由用户决定；用户确认不填则删除这些行。无任何痕迹的周末不主动生成
+- 法定节假日/调休无法准确判断，将周期内疑似节假日列出来提醒用户确认（非工作日报工同样走 `加班`）
 - 一天多项目按文档量拆分工时（如 4+4），标注"(建议)"
 - 工作内容从 doc 文档标题归纳，50 字内，附来源文档相对路径
-- 工作内容控制在 1000 字内、不得含 `|` 字符（表格列边界 + 服务端字符白名单）
+- 工作内容控制在 1000 字内、不得含 `|` 字符（表格列边界 + 服务端字符白名单）；加班行的内容即加班原因，服务端必填
 
 ### 6. 【硬性关口】等用户确认
 
@@ -77,15 +88,18 @@ find "<P>" -path "*/doc/*" -name "*.md" -type f -newermt 2026-09-01 ! -newermt 2
 
 ### 7. 提交
 
-重新读取文档；若文档含"## 已提交"标记则先问用户是否重提。解析表格行调用 `fill_work_hours`：
+重新读取文档；若文档含"## 已提交"标记则先问用户是否重提。解析表格行调用 `fill_work_hours`（`类型` 列的 工时/加班 映射到 `type`，省略默认"工时"）：
 
 ```json
 {
   "entries": [
-    { "date": "2026-09-01", "projectCode": "SD26040155", "activityType": "项目执行", "hours": 8, "workContent": "..." }
+    { "date": "2026-09-01", "projectCode": "SD26040155", "activityType": "项目执行", "hours": 8, "workContent": "..." },
+    { "date": "2026-09-06", "projectCode": "SD26040155", "activityType": "项目执行", "hours": 4, "workContent": "上线值守（加班原因）", "type": "加班" }
   ]
 }
 ```
+
+（表格的 `类型` 列为 `加班` 的行必须带 `"type": "加班"`；`工时` 行可省略 `type`）
 
 ### 8. 汇报与收尾
 

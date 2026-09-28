@@ -36,15 +36,16 @@ describe('withReauth', () => {
 });
 
 // InMemory 端到端脚手架：真实走 createMcpServer 处理器与 McpError 透传，无网络
-// （configOk 恒 false：本组用例只验证快速失败与状态查询，正向路径由 e2e 覆盖）
-function makeDeps(): ToolDeps {
+// （默认 configOk=false 验证快速失败与状态查询；configOk=true 仅用于触发快速失败之后的校验分支，
+//   这些分支在真正登录/联网之前就结束，不会发起真实请求）
+function makeDeps(configOk = false): ToolDeps {
   const cfg: LoadConfigResult = {
-    username: '在此填入ihr用户名',
-    password: '在此填入ihr密码',
+    username: configOk ? 'u' : '在此填入ihr用户名',
+    password: configOk ? 'p' : '在此填入ihr密码',
     port: 13210,
     host: '127.0.0.1',
     projectsRoot: 'F:\\项目',
-    configOk: false,
+    configOk,
   };
   return {
     cfg,
@@ -99,5 +100,16 @@ describe('get_config（skill 去路径化：动态取扫描根目录，凭据永
     expect(payload).not.toHaveProperty('username');
     expect(payload).not.toHaveProperty('password');
     expect(Object.keys(payload)).toEqual(['projectsRoot']);
+  });
+});
+
+describe('fill_work_hours type 校验（用户指令：周末填报走加班类型）', () => {
+  it('type 不是 工时/加班 时参数校验失败，且在凭据检查之后、不触发登录', async () => {
+    const deps = makeDeps(true);
+    await expect(
+      callTool(deps, 'fill_work_hours', {
+        entries: [{ date: '2026-09-26', projectCode: 'SD26040155', activityType: '项目执行', hours: 4, workContent: 'x', type: '调休' }],
+      }),
+    ).rejects.toThrow('entries 参数不合法');
   });
 });

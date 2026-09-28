@@ -32,6 +32,7 @@ function isFillArgs(args: any): args is { entries: FillEntry[] } {
       typeof e?.hours === 'number' && e.hours > 0 &&
       typeof e?.workContent === 'string' &&
       (e?.tsDeliveryType === undefined || typeof e.tsDeliveryType === 'string') &&
+      (e?.type === undefined || e.type === '工时' || e.type === '加班') &&
       (e?.areaId === undefined || typeof e.areaId === 'string') &&
       (e?.area === undefined || typeof e.area === 'string'),
   );
@@ -100,7 +101,7 @@ export function createMcpServer(deps: ToolDeps): Server {
       },
       {
         name: 'fill_work_hours',
-        description: '批量提交考勤工时。entries 每项: {date(YYYY-MM-DD), projectCode, activityType, hours, workContent, tsDeliveryType?(默认项目地交付), areaId?, area?}；跨周条目自动按周一~周日分组逐周提交',
+        description: '批量提交考勤工时。entries 每项: {date(YYYY-MM-DD), projectCode, activityType, hours, workContent, type?(工时=默认/加班=非工作日，加班时 workContent 为加班原因), tsDeliveryType?(默认项目地交付), areaId?, area?}；跨周条目自动按周一~周日分组逐周提交',
         inputSchema: {
           type: 'object' as const,
           properties: {
@@ -114,6 +115,7 @@ export function createMcpServer(deps: ToolDeps): Server {
                   activityType: { type: 'string' },
                   hours: { type: 'number' },
                   workContent: { type: 'string' },
+                  type: { type: 'string', enum: ['工时', '加班'] },
                   tsDeliveryType: { type: 'string' },
                   areaId: { type: 'string' },
                   area: { type: 'string' },

@@ -186,3 +186,24 @@ describe('IhrClient.submitWorkHours', () => {
     expect(calls.some((c) => c.path === IHR_LOCATION_PATH)).toBe(false);
   });
 });
+
+describe('IhrClient 非工作日报工（type 透传，用户指令：周末是否填报由用户确认）', () => {
+  const base = {
+    [IHR_USER_INFO_PATH]: USER_INFO,
+    [`${IHR_STAFF_HEADER_PATH}?staffId=27710`]: STAFF_HEADER,
+    [IHR_LIST_ENTRIES_PATH]: SOURCES,
+    [IHR_LOCATION_PATH]: LOCATION,
+    [IHR_SUBMIT_PATH]: OK,
+  };
+
+  it('type=加班 透传到提交体（周末/非工作日报工）', async () => {
+    const calls: Array<{ path: string; body: any }> = [];
+    const http = makeHttp(base, calls);
+    const results = await new IhrClient(http).submitWorkHours([
+      { date: '2026-09-26', projectCode: 'SD26040155', activityType: '项目执行', hours: 4, workContent: '周末上线值守', type: '加班' },
+    ]);
+    expect(results[0].success).toBe(true);
+    const submit = calls.find((c) => c.path === IHR_SUBMIT_PATH);
+    expect(submit!.body.timeSheetDetailDTOList[0]).toMatchObject({ date: '2026-09-26', type: '加班', hours: 4 });
+  });
+});

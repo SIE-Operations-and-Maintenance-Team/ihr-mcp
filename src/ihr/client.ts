@@ -7,6 +7,7 @@ export interface FillEntry {
   activityType: string; // tsTaskName，与 projectCode 共同唯一定位条目
   hours: number;
   workContent: string;
+  type?: string; // 工时（默认，工作日）| 加班（非工作日；服务端要求 content 必填=加班原因）——逆向结果 §2
   tsDeliveryType?: string; // 默认 项目地交付；部门任务忽略
   areaId?: string; // 默认取项目地点 pmsId
   area?: string; // 默认取项目地点 area
@@ -188,7 +189,7 @@ export class IhrClient {
         deptCode: staff.deptCode,
         deptName: staff.deptName,
         hours: e.hours,
-        type: '工时', // 工作日填报固定工时；加班类型见逆向结果 §2，本期 skill 只填工作日
+        type: e.type ?? '工时', // 非工作日（周末/节假日）报工须传 加班，服务端按当日 swScheduled 校验——逆向结果 §2
         date: e.date,
         content: e.workContent,
       };

@@ -40,11 +40,12 @@ cpSync(join(root, 'package.json'), join(stage, 'package.json'));
 cpSync(join(root, 'package-lock.json'), join(stage, 'package-lock.json'));
 execSync('npm ci --omit=dev', { cwd: stage, stdio: 'inherit' });
 
-// 3. 部署脚本与 cmd
+// 3. 部署脚本、cmd 与 skill 源
 cpSync(join(root, 'scripts'), join(stage, 'scripts'), { recursive: true });
 for (const f of ['service-install.cmd', 'service-uninstall.cmd', 'ihr-service.cmd']) {
   cpSync(join(root, f), join(stage, f));
 }
+cpSync(join(root, 'skill'), join(stage, 'skill'), { recursive: true });
 
 // 4. 打 zip（PowerShell Compress-Archive：Windows 自带；execSync 走 cmd.exe 时 tar 会解析到 Git Bash 的 GNU tar，对 zip 不可靠）
 execSync(
@@ -76,3 +77,4 @@ for (const mustNotExist of [
 
 console.log(`[完成] 发布包: ${zipPath}`);
 console.log('[说明] 同事解压后双击 service-install.cmd 即可；机器需已安装 Node.js ≥20。首次启动自动生成 config.json 模板，填入账号密码后 ihr-service.cmd restart');
+console.log('[说明] 填报考勤 skill 源在包内 skill\\ihr-attendance\\，按所用 agent 的技能目录安装：ZCode → %USERPROFILE%\\.zcode\\skills\\，Claude Code → %USERPROFILE%\\.claude\\skills\\，通用 → %USERPROFILE%\\.agents\\skills\\（目录名保持 ihr-attendance）');
