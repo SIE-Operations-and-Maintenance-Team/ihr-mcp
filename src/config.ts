@@ -66,6 +66,31 @@ export function ensureConfigTemplate(path: string = defaultConfigPath()): boolea
   return true;
 }
 
+// 网页配置保存：合并传入字段到现有配置并落盘。password 传空串/缺省 = 保留旧密码；
+// 校验失败抛错且不落盘。path 供测试注入，默认写程序根目录 config.json
+export function updateConfig(
+  patch: { username?: string; password?: string; projectsRoot?: string; host?: string; port?: number | string },
+  path: string = defaultConfigPath(),
+): LoadConfigResult {
+  const current = loadConfig(path);
+  const next = {
+    username: patch.username !== undefined ? String(patch.username).trim() : current.username,
+    password: patch.password ? String(patch.password) : current.password,
+    projectsRoot: patch.projectsRoot !== undefined ? String(patch.projectsRoot).trim() : current.projectsRoot,
+    host: patch.host !== undefined ? String(patch.host).trim() : current.host,
+    port: patch.port !== undefined ? Number(patch.port) : current.port,
+  };
+  if (!Number.isInteger(next.port) || next.port < 1 || next.port > 65535) {
+    throw new Error(`port 非法: ${String(patch.port)}（应为 1-65535 的整数）`);
+  }
+  if (!next.username || !next.password || !next.projectsRoot || !next.host) {
+    throw new Error('username/password/projectsRoot/host 均不能为空');
+  }
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(next, null, 2), 'utf8');
+  return loadConfig(path);
+}
+
 // 服务监听地址优先级：命令行参数 > config.json > 内置默认（13210/127.0.0.1）
 export function resolveServerAddress(
   cfg: { port?: number; host?: string },

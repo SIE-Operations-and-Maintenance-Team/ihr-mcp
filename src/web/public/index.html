@@ -16,11 +16,29 @@
   .none { background: #fff1f0; color: #cf1322; }
   button { padding: 4px 14px; cursor: pointer; }
   #msg { margin-left: 12px; font-size: 13px; color: #888; }
+  .header { display: flex; justify-content: space-between; align-items: center; }
+  #cfgPanel input { padding: 3px 6px; }
 </style>
 </head>
 <body>
-<h1>ihr-mcp 考勤管理</h1>
+<div class="header">
+  <h1>ihr-mcp 考勤管理</h1>
+  <button onclick="openConfig()">⚙ 配置</button>
+</div>
 <div class="card" id="status">状态加载中…</div>
+<div class="card" id="cfgPanel" style="display:none">
+  <h1 style="font-size:16px;margin-top:0">服务配置（保存并重启后生效）</h1>
+  <table style="margin-bottom:10px">
+    <tr><th style="width:120px">用户名</th><td><input id="cfgUser" style="width:100%"></td></tr>
+    <tr><th>密码</th><td><input id="cfgPwd" type="password" placeholder="留空则保持现有密码" style="width:100%"></td></tr>
+    <tr><th>项目根目录</th><td><input id="cfgRoot" style="width:100%" placeholder="如 F:\项目"></td></tr>
+    <tr><th>监听地址 IP</th><td><input id="cfgHost" style="width:100%" placeholder="127.0.0.1"></td></tr>
+    <tr><th>端口</th><td><input id="cfgPort" style="width:100%" placeholder="13210"></td></tr>
+  </table>
+  <button onclick="saveConfig()">保存并重启生效</button>
+  <button onclick="document.getElementById('cfgPanel').style.display='none'">取消</button>
+  <span id="cfgMsg" style="margin-left:12px;font-size:13px;color:#888"></span>
+</div>
 <div class="card">
   <button onclick="loadProjects()">刷新项目列表</button><span id="msg"></span>
   <table id="projTable" style="margin-top:12px">
@@ -89,6 +107,55 @@ async function saveMapping(code, customer) {
     body: JSON.stringify({ projectCode: code, customer }),
   })).json();
   document.getElementById('msg').textContent = r.ok ? '已保存 ' + code + ' → ' + customer : '保存失败: ' + (r.error || '');
+}
+
+async function openConfig() {
+  try {
+    const c = await (await fetch('/api/config')).json();
+    document.getElementById('cfgUser').value = c.username || '';
+    document.getElementById('cfgPwd').value = '';
+    document.getElementById('cfgRoot').value = c.projectsRoot || '';
+    document.getElementById('cfgHost').value = c.host || '';
+    document.getElementById('cfgPort').value = c.port || '';
+    document.getElementById('cfgMsg').textContent = '';
+    document.getElementById('cfgPanel').style.display = 'block';
+  } catch (e) {
+    document.getElementById('cfgMsg').textContent = '配置读取失败: ' + e.message;
+  }
+}
+
+async function saveConfig() {
+  const msg = document.getElementById('cfgMsg');
+  const body = {
+    username: document.getElementById('cfgUser').value.trim(),
+    password: document.getElementById('cfgPwd').value,
+    projectsRoot: document.getElementById('cfgRoot').value.trim(),
+    host: document.getElementById('cfgHost').value.trim(),
+    port: document.getElementById('cfgPort').value.trim(),
+  };
+  if (!body.password) delete body.password; // 留空 = 保持现有密码
+  const r1 = await (await fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })).json();
+  if (!r1.ok) { msg.textContent = '保存失败: ' + (r1.error || ''); return; }
+  msg.textContent = '已保存，服务重启中，几秒后自动刷新…';
+  try { await fetch('/api/restart', { method: 'POST' }); } catch (e) { /* 重启导致断开属预期 */ }
+  // 新监听地址：host 填 0.0.0.0 时按当前页面的主机名访问
+  const newHost = (body.host === '0.0.0.0' || body.host === '::') ? location.hostname : body.host;
+  const pollURL = 'http://' + newHost + ':' + (body.port || location.port) + '/api/status';
+  let n = 0;
+  const timer = setInterval(async () => {
+    n++;
+    try {
+      await fetch(pollURL);
+      clearInterval(timer);
+      location.href = pollURL.replace('/api/status', '/');
+    } catch (e) {
+      if (n > 15) { clearInterval(timer); msg.textContent = '重启超时，请检查服务后手动刷新'; }
+    }
+  }, 1000);
 }
 
 loadStatus();
