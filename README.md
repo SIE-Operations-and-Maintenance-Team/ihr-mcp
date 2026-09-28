@@ -61,6 +61,8 @@ node dist/index.js -t http        # 前台运行；npm start 等价
 | `port` / `host` | 服务监听地址，优先级：命令行 `-p/-h` > config.json > 默认（13210/127.0.0.1） |
 | `projectsRoot` | 本地项目根目录（skill 扫描 doc 工作文档、Web 页客户下拉的来源） |
 
+网页端右上角"⚙ 配置"可在线修改以上字段（密码留空=保持不变），保存后服务自动重启生效。
+
 另有 `mapping.json`（同目录）保存"项目编号 → 客户名"的手动映射，可在 Web 页修改，也可由 `set_customer_mapping` 工具写入。
 
 > 改完配置需重启服务生效：`ihr-service.cmd restart`（或手动重启进程）。
