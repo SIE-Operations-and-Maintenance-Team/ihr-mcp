@@ -16,7 +16,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const program = new Command();
 program
   .name('ihr-mcp')
-  .version('0.1.0')
+  .version('0.2.0')
   .option('-t, --transport <type>', '传输类型 (http, stdio)', 'http')
   .option('-p, --port <number>', 'HTTP 端口（优先级：命令行 > config.json > 13210）')
   .option('-h, --host <host>', '监听地址（优先级：命令行 > config.json > 127.0.0.1）')

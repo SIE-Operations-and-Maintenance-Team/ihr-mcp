@@ -61,7 +61,7 @@ export async function withReauth<T>(deps: ToolDeps, fn: () => Promise<T>): Promi
 
 export function createMcpServer(deps: ToolDeps): Server {
   const server = new Server(
-    { name: 'ihr-mcp', version: '0.1.0' },
+    { name: 'ihr-mcp', version: '0.2.0' },
     { capabilities: { tools: {} } },
   );
 
