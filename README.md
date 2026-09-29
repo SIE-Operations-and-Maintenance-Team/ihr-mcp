@@ -12,7 +12,7 @@
 
 - **SSO 自动登录**：复用统一认证中心接口（AES 加密密码），token 缓存 7 天，失效/被吊销自动重登重试
 - **报工条目获取**：按当月拉取可填报项目，解析项目编号/名称/活动类型，自动推断项目归属客户（可手动修正）
-- **考勤提交**：按周一~周日自动分组、逐周批量提交；工作日默认"工时"，周末/节假日支持"加班"类型；交付类型与实施地点自动带出（可覆盖）
+- **考勤提交**：按周一~周日自动分组、逐周批量提交；工作日默认"工时"，周末/节假日支持"加班"类型；默认交付类型"公司远程交付"（实施地点 ODC集中交付区域（顺德）），项目地交付等类型可指定并自动带出项目地点
 - **Web 管理页**：登录状态、在线配置（用户名/密码/端口等，保存自动重启）、项目列表、项目↔客户映射修正（一键保存）
 - **配对 skill**：扫描本地项目 doc 文档 → 归纳每日工作 → 生成考勤填报文档 → **用户硬性确认后**自动提交
 - **Windows 服务部署**：一条 cmd 装成系统服务（开机自启）；离线发布包打包，同事零依赖安装
@@ -97,7 +97,7 @@ ZCode：编辑 `%USERPROFILE%\.zcode\cli\config.json` 的 `mcp.servers` 段：
 | `list_projects` | 无 | 当月可填报项目：`{projectCode, projectName, activityType, customer, customerSource, ...}` |
 | `get_customer_mapping` | 无 | 项目编号→客户名映射表 |
 | `set_customer_mapping` | `{projectCode, customer}` | 修正项目↔客户映射（覆盖自动推断） |
-| `fill_work_hours` | `{entries: [...]}` | 批量提交考勤，自动按周一~周日分周批量提交。每项：`{date, projectCode, activityType, hours, workContent, type?(工时=默认/加班=非工作日), tsDeliveryType?(默认项目地交付), areaId?, area?}` |
+| `fill_work_hours` | `{entries: [...]}` | 批量提交考勤，自动按周一~周日分周批量提交。每项：`{date, projectCode, activityType, hours, workContent, type?(工时=默认/加班=非工作日), tsDeliveryType?(默认公司远程交付), areaId?, area?(公司远程交付缺省ODC集中交付区域（顺德）)}` |
 
 提交语义与防护：周级批量全或无；`configOk=false` 时快速失败并携带配置文件绝对路径；token 失效自动重登后重试一次，已成功周不会重复提交。
 

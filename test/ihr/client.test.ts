@@ -63,7 +63,7 @@ describe('IhrClient.submitWorkHours', () => {
     [IHR_SUBMIT_PATH]: OK,
   };
 
-  it('同周多条目合并为一次批量提交，项目任务带默认交付类型与地点', async () => {
+  it('同周多条目合并为一次批量提交，缺省交付类型为公司远程交付+顺德ODC', async () => {
     const calls: Array<{ path: string; body: any }> = [];
     const http = makeHttp(base, calls);
     const results = await new IhrClient(http).submitWorkHours([
@@ -77,7 +77,10 @@ describe('IhrClient.submitWorkHours', () => {
     const body = submits[0].body;
     expect(body.timeSheetMainDTO).toMatchObject({ staffId: 27710, deptCode: 4042, sourceType: 'WEB', startDate: '2026-09-21', endDate: '2026-09-27' });
     expect(body.timeSheetDetailDTOList).toHaveLength(2);
-    expect(body.timeSheetDetailDTOList[0]).toMatchObject({ poCode: 'SD26040155', date: '2026-09-22', hours: 8, type: '工时', tsDeliveryType: '项目地交付', areaId: 'B0HBBO6AQX', area: '大良镇' });
+    const detail = body.timeSheetDetailDTOList[0];
+    expect(detail).toMatchObject({ poCode: 'SD26040155', date: '2026-09-22', hours: 8, type: '工时', tsDeliveryType: '公司远程交付', area: 'ODC集中交付区域（顺德）' });
+    expect(detail.areaId).toBeUndefined();
+    expect(calls.some((c) => c.path === IHR_LOCATION_PATH)).toBe(false);
   });
 
   it('errorCode 非 0 时该周条目全部失败并带回 errorMsg', async () => {
@@ -119,16 +122,31 @@ describe('IhrClient.submitWorkHours', () => {
     expect(detail.areaId).toBeUndefined();
   });
 
-  it('公司远程交付缺显式 area 时该周失败并提示，不静默为空', async () => {
+  it('公司远程交付未提供 area 时缺省为顺德ODC且不携带 areaId', async () => {
     const calls: Array<{ path: string; body: any }> = [];
     const http = makeHttp(base, calls);
     const results = await new IhrClient(http).submitWorkHours([
       { date: '2026-09-22', projectCode: 'SD26040155', activityType: '项目执行', hours: 8, workContent: 'w', tsDeliveryType: '公司远程交付' },
     ]);
-    expect(results[0].success).toBe(false);
-    expect(results[0].message).toContain('公司远程交付');
-    expect(results[0].message).toContain('显式提供 area');
-    expect(calls.some((c) => c.path === IHR_SUBMIT_PATH)).toBe(false);
+    expect(results[0].success).toBe(true);
+    const detail = calls.find((c) => c.path === IHR_SUBMIT_PATH)!.body.timeSheetDetailDTOList[0];
+    expect(detail.tsDeliveryType).toBe('公司远程交付');
+    expect(detail.area).toBe('ODC集中交付区域（顺德）');
+    expect(detail.areaId).toBeUndefined();
+    expect(calls.some((c) => c.path === IHR_LOCATION_PATH)).toBe(false);
+  });
+
+  it('显式项目地交付仍按项目地点带出 areaId/area', async () => {
+    const calls: Array<{ path: string; body: any }> = [];
+    const http = makeHttp(base, calls);
+    const results = await new IhrClient(http).submitWorkHours([
+      { date: '2026-09-22', projectCode: 'SD26040155', activityType: '项目执行', hours: 8, workContent: 'w', tsDeliveryType: '项目地交付' },
+    ]);
+    expect(results[0].success).toBe(true);
+    const detail = calls.find((c) => c.path === IHR_SUBMIT_PATH)!.body.timeSheetDetailDTOList[0];
+    expect(detail.tsDeliveryType).toBe('项目地交付');
+    expect(detail.areaId).toBe('B0HBBO6AQX');
+    expect(detail.area).toBe('大良镇');
   });
 
   it('跨两周条目按周一~周日分组逐周提交', async () => {

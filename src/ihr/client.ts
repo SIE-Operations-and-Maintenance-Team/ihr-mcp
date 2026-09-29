@@ -8,9 +8,9 @@ export interface FillEntry {
   hours: number;
   workContent: string;
   type?: string; // 工时（默认，工作日）| 加班（非工作日；服务端要求 content 必填=加班原因）——逆向结果 §2
-  tsDeliveryType?: string; // 默认 项目地交付；部门任务忽略
-  areaId?: string; // 默认取项目地点 pmsId
-  area?: string; // 默认取项目地点 area
+  tsDeliveryType?: string; // 默认 公司远程交付；部门任务忽略
+  areaId?: string; // 仅项目地交付两种类型默认取项目地点 pmsId，其余类型不传（DTO areaId=null）
+  area?: string; // 缺省按交付类型：公司远程交付=ODC集中交付区域（顺德，6 个办公区域选项第 1 项），项目地交付=项目地点，Base地交付=Base 地名称
 }
 
 export interface FillResult {
@@ -198,7 +198,7 @@ export class IhrClient {
         // 部门任务：不渲染交付类型，DTO areaId=null、area=Base 地名称
         detail.area = await this.getBaseName();
       } else {
-        const deliveryType = e.tsDeliveryType ?? '项目地交付';
+        const deliveryType = e.tsDeliveryType ?? '公司远程交付';
         detail.tsDeliveryType = deliveryType;
         if (deliveryType === '项目地交付') {
           const loc = await this.getLocation(src.poId);
@@ -220,13 +220,10 @@ export class IhrClient {
           detail.area = e.area;
         } else {
           // Base地交付/公司远程交付/居家远程交付：DTO areaId=null，仅调用方显式提供时携带
-          if (deliveryType === '公司远程交付' && !e.area) {
-            // 公司远程交付有 6 个办公区域选项、无确定缺省，禁止静默提交空 area（逆向结果 §2），该周条目走失败结果
-            throw new Error('交付类型「公司远程交付」必须显式提供 area（6 个办公区域选项，无确定缺省）');
-          }
           if (e.areaId) detail.areaId = e.areaId;
           detail.area = e.area
             ?? (deliveryType === 'Base地交付' ? await this.getBaseName()
+              : deliveryType === '公司远程交付' ? 'ODC集中交付区域（顺德）' // 6 个办公区域选项第 1 项（whf.js pr 常量，前端不自动选中，此处固化用户惯选项）
               : deliveryType === '居家远程交付' ? '居家' : undefined); // 居家选项唯一且自动预选（§2），area 必填
         }
       }

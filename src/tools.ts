@@ -101,7 +101,7 @@ export function createMcpServer(deps: ToolDeps): Server {
       },
       {
         name: 'fill_work_hours',
-        description: '批量提交考勤工时。entries 每项: {date(YYYY-MM-DD), projectCode, activityType, hours, workContent, type?(工时=默认/加班=非工作日，加班时 workContent 为加班原因), tsDeliveryType?(默认项目地交付), areaId?, area?}；跨周条目自动按周一~周日分组逐周提交',
+        description: '批量提交考勤工时。entries 每项: {date(YYYY-MM-DD), projectCode, activityType, hours, workContent, type?(工时=默认/加班=非工作日，加班时 workContent 为加班原因), tsDeliveryType?(默认公司远程交付), areaId?, area?(公司远程交付缺省ODC集中交付区域（顺德）)}；跨周条目自动按周一~周日分组逐周提交',
         inputSchema: {
           type: 'object' as const,
           properties: {
