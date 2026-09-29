@@ -8,6 +8,8 @@ export interface WorkEntry {
   taskType?: string; // 项目任务 | 部门任务（逆向结果 §1）
   poId?: string; // 项目/部门编号，地点接口入参
   tsTaskId?: string; // 工时任务 id，提交体携带
+  startDate?: string; // 项目期望起止时间，来自条目接口，listEntries 透传
+  endDate?: string;
 }
 
 // 条目样例: SD26040155|方正微QMS二期质保-…·实施质保项目2026/项目执行

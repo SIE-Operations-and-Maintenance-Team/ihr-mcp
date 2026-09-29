@@ -61,4 +61,27 @@ describe('listProjectsWithMapping（回归：修复前发的是当前周区间�
     const post = calls.find((c) => c.path === IHR_LIST_ENTRIES_PATH);
     expect(post?.body).toEqual({ userId: '27710', start: '2026-09-01', finish: '2026-09-30' });
   });
+
+  it('输出条目的项目期望起止时间（manual 命中与 guess/none 分支均覆盖）', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-15T10:00:00'));
+    const http = makeHttp({
+      [IHR_USER_INFO_PATH]: { errorCode: '0', data: { staffId: 27710, staffName: '<姓名>' } },
+      [`${IHR_STAFF_HEADER_PATH}?staffId=27710`]: { errorCode: '0', data: { deptCode: '4042', deptName: '运维部' } },
+      [IHR_LIST_ENTRIES_PATH]: { errorCode: '0', data: [
+        { taskType: '项目任务', poId: '1', poCode: 'SD99', poName: '某项目', tsTaskId: '11', tsTaskName: '项目执行', startDate: '2026-09-08', endDate: '2026-10-31' },
+        { taskType: '部门任务', poId: '4042', poCode: '4042', poName: '运维部', tsTaskId: '0', tsTaskName: '部门出勤', startDate: '1970-01-01', endDate: '9999-12-31' },
+      ] },
+    });
+    const mapping = new MappingStore(join(mkdtempSync(join(tmpdir(), 'ihr-mcp-')), 'mapping.json'));
+    mapping.set('SD99', '某客户'); // manual 映射命中
+    const deps = {
+      cfg: { username: 'u', password: 'p', port: 13210, host: '127.0.0.1', projectsRoot: 'F:\\不存在的目录', configOk: true },
+      session: { getAuthedHttp: async () => http },
+      mapping,
+    } as any;
+    const views = await listProjectsWithMapping(deps);
+    expect(views[0]).toMatchObject({ projectCode: 'SD99', customer: '某客户', customerSource: 'manual', expectedStartDate: '2026-09-08', expectedEndDate: '2026-10-31' });
+    expect(views[1]).toMatchObject({ projectCode: '4042', customer: '未匹配', customerSource: 'none', expectedStartDate: '1970-01-01', expectedEndDate: '9999-12-31' });
+  });
 });

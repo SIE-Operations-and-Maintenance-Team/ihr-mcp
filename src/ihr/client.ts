@@ -132,6 +132,8 @@ export class IhrClient {
       taskType: e.taskType,
       poId: e.poId,
       tsTaskId: e.tsTaskId,
+      startDate: e.startDate,
+      endDate: e.endDate,
       raw: `${e.poCode}|${e.poName}/${e.tsTaskName}`,
     }));
   }

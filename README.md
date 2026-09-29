@@ -94,7 +94,7 @@ ZCode：编辑 `%USERPROFILE%\.zcode\cli\config.json` 的 `mcp.servers` 段：
 |------|------|------|
 | `get_login_status` | 无 | 登录状态、凭据配置检查；返回 `configPath`（配置文件绝对路径） |
 | `get_config` | 无 | 非敏感运行配置（`projectsRoot`）。**凭据永不出 MCP** |
-| `list_projects` | 无 | 当月可填报项目：`{projectCode, projectName, activityType, customer, customerSource, ...}` |
+| `list_projects` | 无 | 当月可填报项目：`{projectCode, projectName, activityType, customer, customerSource, expectedStartDate/expectedEndDate, ...}` |
 | `get_customer_mapping` | 无 | 项目编号→客户名映射表 |
 | `set_customer_mapping` | `{projectCode, customer}` | 修正项目↔客户映射（覆盖自动推断） |
 | `fill_work_hours` | `{entries: [...]}` | 批量提交考勤，自动按周一~周日分周批量提交。每项：`{date, projectCode, activityType, hours, workContent, type?(工时=默认/加班=非工作日), tsDeliveryType?(默认公司远程交付), areaId?, area?(公司远程交付缺省ODC集中交付区域（顺德）)}` |

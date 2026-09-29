@@ -79,7 +79,7 @@ export function createMcpServer(deps: ToolDeps): Server {
       },
       {
         name: 'list_projects',
-        description: '获取 ihr 报工项目条目列表（当月口径；项目编号/名称/活动类型/客户映射。提交时按填报周校验条目有效期）',
+        description: '获取 ihr 报工项目条目列表（当月口径；项目编号/名称/活动类型/客户映射/项目期望起止时间 expectedStartDate/expectedEndDate。提交时按填报周校验条目有效期）',
         inputSchema: { type: 'object' as const, properties: {}, required: [] },
       },
       {

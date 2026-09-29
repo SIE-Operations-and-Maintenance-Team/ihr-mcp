@@ -48,6 +48,8 @@ describe('IhrClient.listEntries', () => {
       activityType: '项目执行',
       taskType: '项目任务',
       tsTaskId: '7878655',
+      startDate: '2026-04-01',
+      endDate: '2027-03-31',
       raw: 'SD26040155|方正微QMS二期质保-华为云计算技术制造运营管理系统·实施质保项目2026/项目执行',
     });
   });

@@ -8,6 +8,8 @@ import { Config } from './config.js';
 export interface ProjectView extends WorkEntry {
   customer: string;
   customerSource: 'manual' | 'guess' | 'none';
+  expectedStartDate: string | null; // 项目期望起止时间（条目 startDate/endDate 透传，缺省 null）
+  expectedEndDate: string | null;
 }
 
 export function listLocalFolders(projectsRoot: string): string[] {
@@ -41,13 +43,15 @@ export async function listProjectsWithMapping(deps: {
   const manual = deps.mapping.load();
   return entries.map((e) => {
     if (manual[e.projectCode]) {
-      return { ...e, customer: manual[e.projectCode], customerSource: 'manual' as const };
+      return { ...e, customer: manual[e.projectCode], customerSource: 'manual' as const, expectedStartDate: e.startDate ?? null, expectedEndDate: e.endDate ?? null };
     }
     const guess = guessCustomer(e.projectName, folders);
     return {
       ...e,
       customer: guess ?? '未匹配',
       customerSource: guess ? ('guess' as const) : ('none' as const),
+      expectedStartDate: e.startDate ?? null,
+      expectedEndDate: e.endDate ?? null,
     };
   });
 }
