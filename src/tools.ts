@@ -9,12 +9,14 @@ import { LoadConfigResult, defaultConfigPath } from './config.js';
 import { SessionManager } from './session.js';
 import { MappingStore } from './mapping.js';
 import { listProjectsWithMapping } from './service.js';
-import { IhrClient, FillEntry } from './ihr/client.js';
+import { IhrAuthExpiredError, IhrClient, FillEntry } from './ihr/client.js';
+import { PmsError, ProjectSnapshot } from './pms/client.js';
 
 export interface ToolDeps {
   cfg: LoadConfigResult;
   session: SessionManager;
   mapping: MappingStore;
+  managedProjects?: () => Promise<ProjectSnapshot>;
 }
 
 function isSetMappingArgs(args: any): args is { projectCode: string; customer: string } {
@@ -51,8 +53,8 @@ export async function withReauth<T>(deps: ToolDeps, fn: () => Promise<T>): Promi
   try {
     return await fn();
   } catch (err: any) {
-    if (/\[errorCode=401\]/.test(String(err?.message))) {
-      deps.session.invalidate();
+    if (err instanceof IhrAuthExpiredError) {
+      deps.session.invalidateIfToken(err.requestToken);
       return await fn();
     }
     throw err;
@@ -80,6 +82,11 @@ export function createMcpServer(deps: ToolDeps): Server {
       {
         name: 'list_projects',
         description: '获取 ihr 报工项目条目列表（当月口径；项目编号/名称/活动类型/客户映射/项目期望起止时间 expectedStartDate/expectedEndDate。提交时按填报周校验条目有效期）',
+        inputSchema: { type: 'object' as const, properties: {}, required: [] },
+      },
+      {
+        name: 'list_managed_projects',
+        description: '只读获取当前 SSO 账号管理的 PMS 项目及项目计划期完整快照，不返回认证凭据。',
         inputSchema: { type: 'object' as const, properties: {}, required: [] },
       },
       {
@@ -153,6 +160,29 @@ export function createMcpServer(deps: ToolDeps): Server {
         case 'list_projects':
           requireConfigOk(deps);
           return ok({ projects: await withReauth(deps, () => listProjectsWithMapping(deps)) });
+        case 'list_managed_projects': {
+          if (!deps.managedProjects) {
+            return {
+              isError: true,
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({ error: { code: 'UPSTREAM_UNAVAILABLE', message: 'PMS 查询未初始化' } }),
+              }],
+            };
+          }
+          try {
+            return ok(await deps.managedProjects());
+          } catch (err) {
+            if (!(err instanceof PmsError)) throw err;
+            return {
+              isError: true,
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({ error: { code: err.code, message: err.message } }),
+              }],
+            };
+          }
+        }
         case 'get_customer_mapping':
           return ok({ mapping: deps.mapping.load() });
         case 'set_customer_mapping': {

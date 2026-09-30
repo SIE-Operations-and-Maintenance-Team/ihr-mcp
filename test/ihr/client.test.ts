@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import axios from 'axios';
 import {
-  IhrClient, IHR_LIST_ENTRIES_PATH, IHR_SUBMIT_PATH, IHR_USER_INFO_PATH, IHR_STAFF_HEADER_PATH, IHR_LOCATION_PATH, IHR_BASE_NAME_PATH,
+  IhrAuthExpiredError, IhrClient, IHR_LIST_ENTRIES_PATH, IHR_SUBMIT_PATH, IHR_USER_INFO_PATH, IHR_STAFF_HEADER_PATH, IHR_LOCATION_PATH, IHR_BASE_NAME_PATH,
 } from '../../src/ihr/client.js';
 
 // mock：按 path 路由并记录调用（HTTP 恒 200，业务错误走 errorCode，见逆向结果 §0）
@@ -31,6 +31,37 @@ const LOCATION = { errorCode: '0', data: [{ pmsId: 'B0HBBO6AQX', area: '大良�
 // Base 地名称（逆向结果 §3.5 实测结构）
 const BASE_NAME = { errorCode: '0', errorMsg: 'success', data: '顺德' };
 const OK = { errorCode: '0', data: null };
+
+describe('IhrClient authentication errors', () => {
+  it('401 carries the Authorization token from the failed request without serializing it', async () => {
+    const http = makeHttp({
+      [IHR_USER_INFO_PATH]: { errorCode: '401', errorMsg: '系统未登录或认证已过期' },
+    });
+    http.defaults.headers.common['Authorization'] = 'Bearer T1';
+
+    const error = await new IhrClient(http)
+      .listEntries('2026-09-21', '2026-09-27')
+      .then(() => undefined, (err) => err);
+
+    expect(error).toBeInstanceOf(IhrAuthExpiredError);
+    expect(error.requestToken).toBe('T1');
+    expect(error.message).toContain('系统未登录或认证已过期');
+    expect(Object.keys(error)).not.toContain('requestToken');
+    expect(JSON.stringify(error)).not.toContain('T1');
+  });
+
+  it('401 without Authorization has an empty request token', async () => {
+    const http = makeHttp({
+      [IHR_USER_INFO_PATH]: { errorCode: 401, errorMsg: '系统未登录或认证已过期' },
+    });
+    const error = await new IhrClient(http)
+      .listEntries('2026-09-21', '2026-09-27')
+      .then(() => undefined, (err) => err);
+
+    expect(error).toBeInstanceOf(IhrAuthExpiredError);
+    expect(error.requestToken).toBe('');
+  });
+});
 
 describe('IhrClient.listEntries', () => {
   it('按周区间请求并映射为 WorkEntry', async () => {

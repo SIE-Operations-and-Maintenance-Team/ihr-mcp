@@ -88,16 +88,44 @@ ZCode：编辑 `%USERPROFILE%\.zcode\cli\config.json` 的 `mcp.servers` 段：
 
 其他支持 MCP 的客户端（Claude Code 等）按各自格式注册同一 URL 即可。
 
-## MCP 工具（6 个）
+## MCP 工具（7 个）
 
 | 工具 | 入参 | 说明 |
 |------|------|------|
 | `get_login_status` | 无 | 登录状态、凭据配置检查；返回 `configPath`（配置文件绝对路径） |
 | `get_config` | 无 | 非敏感运行配置（`projectsRoot`）。**凭据永不出 MCP** |
 | `list_projects` | 无 | 当月可填报项目：`{projectCode, projectName, activityType, customer, customerSource, expectedStartDate/expectedEndDate, ...}` |
+| `list_managed_projects` | 无 | 只读获取当前账号管理的完整 PMS 项目快照；不改变既有 `list_projects` 的考勤语义 |
 | `get_customer_mapping` | 无 | 项目编号→客户名映射表 |
 | `set_customer_mapping` | `{projectCode, customer}` | 修正项目↔客户映射（覆盖自动推断） |
 | `fill_work_hours` | `{entries: [...]}` | 批量提交考勤，自动按周一~周日分周批量提交。每项：`{date, projectCode, activityType, hours, workContent, type?(工时=默认/加班=非工作日), tsDeliveryType?(默认公司远程交付), areaId?, area?(公司远程交付缺省ODC集中交付区域（顺德）)}` |
+
+### PMS 项目快照（只读）
+
+本机 Web 服务提供 `GET http://127.0.0.1:13210/api/pms/managed-projects`，MCP 工具 `list_managed_projects` 返回同一份结构。请求由本地服务使用当前 iHR SSO 会话访问 PMS；调用方不需要也不应传入 token、cookie 或登录凭据。
+
+只有所有 PMS 分页都成功读取并校验后，响应才会是 `complete: true`：
+
+```json
+{
+  "schemaVersion": 1,
+  "sourceAccount": "当前 iHR 配置账号",
+  "fetchedAt": "2026-09-30T02:00:00.000Z",
+  "complete": true,
+  "projects": [
+    {
+      "projectId": "PMS 内部项目 ID",
+      "projectCode": "项目编号",
+      "projectName": "项目名称",
+      "status": "项目状态",
+      "planStartDate": "2026-04-01",
+      "planEndDate": "2027-03-31"
+    }
+  ]
+}
+```
+
+该查询为只读，不提交考勤、不改变项目映射，也不暴露 PMS 会话凭据。分页或登录失败会返回错误，不会把部分项目伪装成成功的空列表；ITSM Manager 应显示同步错误并暂停自动报告。
 
 提交语义与防护：周级批量全或无；`configOk=false` 时快速失败并携带配置文件绝对路径；token 失效自动重登后重试一次，已成功周不会重复提交。
 

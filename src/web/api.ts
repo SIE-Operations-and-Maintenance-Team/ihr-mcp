@@ -4,11 +4,13 @@ import { SessionManager } from '../session.js';
 import { MappingStore } from '../mapping.js';
 import { listProjectsWithMapping, listLocalFolders } from '../service.js';
 import { updateConfig, defaultConfigPath, LoadConfigResult } from '../config.js';
+import { PmsError, type PmsErrorCode, type ProjectSnapshot } from '../pms/client.js';
 
 export interface WebApiDeps {
   cfg: LoadConfigResult;
   session: SessionManager;
   mapping: MappingStore;
+  managedProjects?: () => Promise<ProjectSnapshot>;
 }
 
 // Web API 仅限本机访问：Host 必须为 127.0.0.1/localhost/[::1]（可带端口），防跨主机调用/DNS rebinding
@@ -25,6 +27,22 @@ export function createWebApi(deps: WebApiDeps) {
     }
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
     try {
+      if (req.method === 'GET' && url.pathname === '/api/pms/managed-projects') {
+        if (!deps.managedProjects) {
+          return json(503, { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'PMS 查询未初始化' } });
+        }
+        try {
+          return json(200, await deps.managedProjects());
+        } catch (err) {
+          const error = err instanceof PmsError ? err : new PmsError('INVALID_RESPONSE', 'PMS 查询失败');
+          const status: Record<PmsErrorCode, number> = {
+            AUTH_REQUIRED: 401,
+            UPSTREAM_UNAVAILABLE: 503,
+            INVALID_RESPONSE: 502,
+          };
+          return json(status[error.code], { error: { code: error.code, message: error.message } });
+        }
+      }
       if (req.method === 'GET' && url.pathname === '/api/status') {
         const t = deps.session.getTokenInfo();
         return json(200, {

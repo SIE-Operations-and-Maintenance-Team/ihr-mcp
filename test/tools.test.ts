@@ -3,7 +3,9 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { withReauth, createMcpServer, ToolDeps } from '../src/tools.js';
 import { SessionManager } from '../src/session.js';
+import { IhrAuthExpiredError } from '../src/ihr/client.js';
 import { MappingStore } from '../src/mapping.js';
+import { PmsError, type ProjectSnapshot } from '../src/pms/client.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,27 +13,115 @@ import { LoadConfigResult } from '../src/config.js';
 
 describe('withReauth', () => {
   it('errorCode=401 时 invalidate 并重登重试一次', async () => {
-    let invalidated = 0;
-    const deps = { session: { invalidate: () => invalidated++ } } as any;
+    const invalidated: string[] = [];
+    const deps = { session: { invalidateIfToken: (token: string) => { invalidated.push(token); return true; } } } as any;
     let calls = 0;
     const result = await withReauth(deps, async () => {
       calls++;
-      if (calls === 1) throw new Error('ihr 接口失败 [errorCode=401]: 系统未登录或认证已过期');
+      if (calls === 1) throw new IhrAuthExpiredError('ihr 接口失败 [errorCode=401]: 系统未登录或认证已过期', 'T1');
       return 'ok';
     });
     expect(result).toBe('ok');
     expect(calls).toBe(2);
-    expect(invalidated).toBe(1);
+    expect(invalidated).toEqual(['T1']);
+  });
+  it('旧 token 的 401 不会清理当前新会话', async () => {
+    let currentToken = 'T2';
+    const invalidated: string[] = [];
+    const deps = {
+      session: {
+        invalidateIfToken: (token: string) => {
+          invalidated.push(token);
+          if (token !== currentToken) return false;
+          currentToken = '';
+          return true;
+        },
+      },
+    } as any;
+    let calls = 0;
+    const result = await withReauth(deps, async () => {
+      calls++;
+      if (calls === 1) throw new IhrAuthExpiredError('ihr 接口失败 [errorCode=401]: 认证已过期', 'T1');
+      return currentToken;
+    });
+
+    expect(result).toBe('T2');
+    expect(calls).toBe(2);
+    expect(invalidated).toEqual(['T1']);
+    expect(currentToken).toBe('T2');
+  });
+  it('第二次 401 直接返回且错误序列化不包含 token', async () => {
+    const secret = 'request-token-secret';
+    const invalidated: string[] = [];
+    const deps = { session: { invalidateIfToken: (token: string) => { invalidated.push(token); return true; } } } as any;
+    let calls = 0;
+    let finalError: unknown;
+    try {
+      await withReauth(deps, async () => {
+        calls++;
+        throw new IhrAuthExpiredError('ihr 接口失败 [errorCode=401]: 认证已过期', secret);
+      });
+    } catch (err) {
+      finalError = err;
+    }
+
+    expect(finalError).toBeInstanceOf(IhrAuthExpiredError);
+    expect(calls).toBe(2);
+    expect(invalidated).toEqual([secret]);
+    expect(JSON.stringify(finalError)).not.toContain(secret);
+    expect(Object.keys(finalError as object)).not.toContain('requestToken');
   });
   it('其他错误原样抛出，不 invalidate', async () => {
     let invalidated = 0;
-    const deps = { session: { invalidate: () => invalidated++ } } as any;
+    const deps = { session: { invalidateIfToken: () => invalidated++ } } as any;
     await expect(
       withReauth(deps, async () => {
         throw new Error('条目未找到: X|Y');
       }),
     ).rejects.toThrow('条目未找到: X|Y');
     expect(invalidated).toBe(0);
+  });
+});
+
+describe('list_managed_projects', () => {
+  it('returns the shared snapshot without credential fields', async () => {
+    const deps = makeDeps(true);
+    const snapshot: ProjectSnapshot = {
+      schemaVersion: 1,
+      sourceAccount: 'test-user',
+      fetchedAt: '2026-09-29T00:00:00Z',
+      complete: true,
+      projects: [],
+    };
+    deps.managedProjects = async () => snapshot;
+    const result = await callTool(deps, 'list_managed_projects');
+    const data = JSON.parse((result.content as any)[0].text);
+
+    expect(data).toEqual(snapshot);
+    expect(data).not.toHaveProperty('token');
+    expect(data).not.toHaveProperty('password');
+    expect(result.isError).not.toBe(true);
+  });
+
+  it('returns PmsError as a structured isError result', async () => {
+    const deps = makeDeps(true);
+    deps.managedProjects = async () => { throw new PmsError('AUTH_REQUIRED', '请先登录 PMS'); };
+    const result = await callTool(deps, 'list_managed_projects');
+
+    expect(result.isError).toBe(true);
+    expect(JSON.parse((result.content as any)[0].text)).toEqual({
+      error: { code: 'AUTH_REQUIRED', message: '请先登录 PMS' },
+    });
+  });
+
+  it('reports an uninitialized PMS query without calling a live service', async () => {
+    const deps = makeDeps(true);
+    const result = await callTool(deps, 'list_managed_projects');
+
+    expect(result.isError).toBe(true);
+    expect(JSON.parse((result.content as any)[0].text)).toMatchObject({
+      error: { code: 'UPSTREAM_UNAVAILABLE', message: 'PMS 查询未初始化' },
+    });
   });
 });
 

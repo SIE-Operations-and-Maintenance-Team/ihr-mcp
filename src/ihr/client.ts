@@ -28,6 +28,16 @@ export const IHR_STAFF_HEADER_PATH = '/core/api/v1/staff/detail/header';
 export const IHR_LOCATION_PATH = '/attendance/api/pms/location';
 export const IHR_BASE_NAME_PATH = '/attendance/api/baseName'; // POST <path>/<staffId>，返回 Base 地名称（§3.5）
 
+export class IhrAuthExpiredError extends Error {
+  declare readonly requestToken: string;
+
+  constructor(message: string, requestToken: string) {
+    super(message);
+    this.name = 'IhrAuthExpiredError';
+    Object.defineProperty(this, 'requestToken', { value: requestToken });
+  }
+}
+
 interface EntrySource {
   taskType: string; poId: string; poCode: string; poName: string;
   tsTaskId: string; tsTaskName: string; startDate: string; endDate: string;
@@ -76,7 +86,15 @@ export class IhrClient {
     // axios get/post 重载签名不同，联合索引调用无法通过 tsc，按 method 分支（get 不传 data）
     const resp = method === 'get' ? await this.http.get(path) : await this.http.post(path, data);
     if (resp.data?.errorCode !== '0') {
-      throw new Error(`ihr 接口失败 [errorCode=${resp.data?.errorCode}]: ${resp.data?.errorMsg ?? '未知错误'}`);
+      const message = `ihr 接口失败 [errorCode=${resp.data?.errorCode}]: ${resp.data?.errorMsg ?? '未知错误'}`;
+      if (String(resp.data?.errorCode) === '401') {
+        const authorization = resp.config.headers['Authorization'];
+        const requestToken = typeof authorization === 'string' && /^Bearer\s+/i.test(authorization)
+          ? authorization.replace(/^Bearer\s+/i, '')
+          : '';
+        throw new IhrAuthExpiredError(message, requestToken);
+      }
+      throw new Error(message);
     }
     return resp.data.data as T;
   }

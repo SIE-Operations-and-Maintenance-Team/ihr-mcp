@@ -10,6 +10,8 @@ import { SessionManager } from './session.js';
 import { MappingStore } from './mapping.js';
 import { createMcpServer } from './tools.js';
 import { createWebApi } from './web/api.js';
+import { PmsClient, PmsError } from './pms/client.js';
+import { listManagedProjects } from './pms/service.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -31,7 +33,15 @@ async function main(): Promise<void> {
   const cfg = loadConfig();
   const session = new SessionManager(cfg);
   const mapping = new MappingStore();
-  const server = createMcpServer({ cfg, session, mapping });
+  const pmsClient = new PmsClient();
+  const managedProjects = async () => {
+    if (!cfg.configOk) {
+      throw new PmsError('AUTH_REQUIRED', '请先配置 SSO 登录凭据');
+    }
+    return listManagedProjects({ session, sourceAccount: cfg.username, client: pmsClient });
+  };
+  const deps = { cfg, session, mapping, managedProjects };
+  const server = createMcpServer(deps);
 
   if (opts.transport === 'stdio') {
     const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
@@ -40,7 +50,7 @@ async function main(): Promise<void> {
   }
 
   const { port, host } = resolveServerAddress(cfg, opts);
-  const webApi = createWebApi({ cfg, session, mapping });
+  const webApi = createWebApi(deps);
 
   const httpServer = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
@@ -48,7 +58,7 @@ async function main(): Promise<void> {
       try {
         // SDK 无状态模式（sessionIdGenerator: undefined）共享 transport 实例会话类错误（初始化 notification 500），
         // 改为每请求新建 server 与 transport 实例、connect 后再 handleRequest
-        const perReqServer = createMcpServer({ cfg, session, mapping });
+        const perReqServer = createMcpServer(deps);
         const perReqTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         await perReqServer.connect(perReqTransport);
         await perReqTransport.handleRequest(req, res);
