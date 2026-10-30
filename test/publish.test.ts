@@ -27,7 +27,7 @@ beforeEach(() => {
   put(join(root, 'dist/index.js'), 'new-code');
   put(join(root, 'dist/daemon/ihrmcp.xml'), 'repo-daemon');
   put(join(root, 'scripts/service-install.mjs'), 'script');
-  put(join(root, 'skill/example.txt'), 'skill');
+  put(join(root, 'skills/example.txt'), 'skill');
   for (const file of ['service-install.cmd', 'service-uninstall.cmd', 'ihr-service.cmd'])
     put(join(root, file), 'cmd');
   put(join(stage, 'config.json'), 'deployed-config');

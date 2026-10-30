@@ -6,7 +6,7 @@
 
 - **传输协议**：Streamable HTTP（`/mcp` 端点，任意支持 MCP 的客户端可接入）+ Web 管理页面
 - **技术栈**：Node.js ≥20、TypeScript、`@modelcontextprotocol/sdk`
-- **配套 skill**：`skill/ihr-attendance/`（教 agent 走完整填报流程，已做 agent 无关化，不绑定 ZCode）
+- **配套 skill**：`skills/ihr-attendance/`（教 agent 走完整填报流程，已做 agent 无关化，不绑定 ZCode）
 
 ## 功能特性
 
@@ -140,7 +140,7 @@ ZCode：编辑 `%USERPROFILE%\.zcode\cli\config.json` 的 `mcp.servers` 段：
 
 ## 填报考勤 skill（ihr-attendance）
 
-`skill/ihr-attendance/SKILL.md`，按所用 agent 的技能目录安装（**目录名保持 `ihr-attendance`**）：
+`skills/ihr-attendance/SKILL.md`，按所用 agent 的技能目录安装（**目录名保持 `ihr-attendance`**）：
 
 | agent | 安装到 |
 |-------|--------|
@@ -222,7 +222,7 @@ ihr-mcp/
 ├── service-install.cmd / service-uninstall.cmd / ihr-service.cmd   # Windows 服务
 ├── publish.cmd                    # 离线发布包打包
 ├── config.json / mapping.json     # 运行配置（本机生成，不入库）
-├── skill/ihr-attendance/SKILL.md  # 填报考勤 skill 源
+├── skills/ihr-attendance/SKILL.md # 填报考勤 skill 源
 ├── src/
 │   ├── index.ts                   # 入口：/mcp + /api/* + Web 页
 │   ├── config.ts session.ts mapping.ts service.ts tools.ts

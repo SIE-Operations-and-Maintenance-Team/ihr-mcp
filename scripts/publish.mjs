@@ -38,7 +38,7 @@ export function publish(repoRoot) {
       cpSync(join(root, 'scripts'), join(stage, 'scripts'), { recursive: true });
       for (const file of ['service-install.cmd', 'service-uninstall.cmd', 'ihr-service.cmd'])
         cpSync(join(root, file), join(stage, file));
-      cpSync(join(root, 'skill'), join(stage, 'skill'), { recursive: true });
+      cpSync(join(root, 'skills'), join(stage, 'skills'), { recursive: true });
 
       for (const rel of ['node_modules/node-windows', 'dist/index.js', 'service-install.cmd']) {
         if (!existsSync(join(stage, rel))) throw new Error('发布包缺少 ' + rel);
@@ -76,7 +76,7 @@ export function publish(repoRoot) {
   if (outcome.backupDir) console.log('[说明] 部署备份：' + outcome.backupDir);
   console.log('[说明] 原服务保持停止；确认发布成功后执行 ihr-service.cmd start。');
   console.log('[说明] 同事解压后运行 service-install.cmd；需 Node.js ≥20；本机配置未进入 ZIP。');
-  console.log('[说明] 考勤 skill 源在包内 skill/ihr-attendance，按所用 agent 的技能目录安装。');
+  console.log('[说明] 考勤 skill 源在包内 skills/ihr-attendance，按所用 agent 的技能目录安装。');
   return zipPath;
 }
 
